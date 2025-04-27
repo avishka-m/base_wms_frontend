@@ -21,6 +21,7 @@ import CreateOrder from './components/orders/CreateOrder';
 
 // Common Components
 import UserProfile from './components/common/UserProfile';
+import ChangePassword from './components/common/ChangePassword';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               
               {/* User routes */}
               <Route path="/profile" element={<UserProfile />} />
+              <Route path="/change-password" element={<ChangePassword />} />
               
               {/* Add more routes here for other pages */}
               
