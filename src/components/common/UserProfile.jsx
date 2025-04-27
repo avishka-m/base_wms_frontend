@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import { authService } from '../../services/api';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 const UserProfile = () => {
   const { currentUser, updateUser } = useAuth();
+  const { success, error: showError } = useNotification();
+  const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,7 +21,6 @@ const UserProfile = () => {
     profile_image: '',
   });
   const [isEditing, setIsEditing] = useState(false);
-  const [updateSuccess, setUpdateSuccess] = useState(false);
 
   // Fetch user data on component mount
   useEffect(() => {
@@ -38,13 +41,14 @@ const UserProfile = () => {
       } catch (err) {
         console.error('Error fetching user data:', err);
         setError('Failed to load user profile. Please try again later.');
+        showError('Failed to load user profile. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserData();
-  }, []);
+  }, [showError]);
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -61,7 +65,6 @@ const UserProfile = () => {
     try {
       setLoading(true);
       setError(null);
-      setUpdateSuccess(false);
       
       // Update user profile
       const updatedUser = await authService.updateProfile(formData);
@@ -75,13 +78,12 @@ const UserProfile = () => {
       }
       
       setIsEditing(false);
-      setUpdateSuccess(true);
-      
-      // Hide success message after 3 seconds
-      setTimeout(() => setUpdateSuccess(false), 3000);
+      success('Profile updated successfully!');
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err.response?.data?.detail || 'Failed to update profile. Please try again.');
+      const errorMessage = err.response?.data?.detail || 'Failed to update profile. Please try again.';
+      setError(errorMessage);
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -132,16 +134,6 @@ const UserProfile = () => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {updateSuccess && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
-          <div className="flex">
-            <div className="ml-3">
-              <p className="text-sm text-green-700">Profile updated successfully!</p>
             </div>
           </div>
         </div>
@@ -337,7 +329,7 @@ const UserProfile = () => {
             </div>
             <button 
               className="btn btn-outline"
-              onClick={() => window.location.href = '/change-password'}
+              onClick={() => navigate('/change-password')}
             >
               Change Password
             </button>

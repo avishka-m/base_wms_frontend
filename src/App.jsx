@@ -5,6 +5,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Notification from './components/common/Notification';
+import { useAuth } from './context/AuthContext';
 
 // Pages
 import Login from './pages/Login';
@@ -25,6 +26,59 @@ import CreateOrder from './components/orders/CreateOrder';
 import UserProfile from './components/common/UserProfile';
 import ChangePassword from './components/common/ChangePassword';
 
+// Root redirect component that checks authentication
+const RootRedirect = () => {
+  const { isAuthenticated, loading } = useAuth();
+  
+  // Show loading indicator while authentication state is being determined
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
+  
+  // Only redirect after loading is complete
+  return isAuthenticated() ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
+};
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<Login />} />
+      
+      {/* Protected routes - within layout */}
+      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<Dashboard />} />
+        
+        {/* Inventory routes */}
+        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/inventory/add" element={<AddInventoryItem />} />
+        <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
+        
+        {/* Order routes */}
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/create" element={<CreateOrder />} />
+        <Route path="/orders/:id" element={<OrderDetails />} />
+        
+        {/* User routes */}
+        <Route path="/profile" element={<UserProfile />} />
+        <Route path="/change-password" element={<ChangePassword />} />
+        
+        {/* Add more routes here for other pages */}
+      </Route>
+      
+      {/* Default redirect based on authentication status */}
+      <Route path="/" element={<RootRedirect />} />
+      
+      {/* 404 page */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -32,37 +86,7 @@ function App() {
         <ChatbotProvider>
           <NotificationProvider>
             <Notification />
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<Login />} />
-              
-              {/* Protected routes - within layout */}
-              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                
-                {/* Inventory routes */}
-                <Route path="/inventory" element={<Inventory />} />
-                <Route path="/inventory/add" element={<AddInventoryItem />} />
-                <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
-                
-                {/* Order routes */}
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/create" element={<CreateOrder />} />
-                <Route path="/orders/:id" element={<OrderDetails />} />
-                
-                {/* User routes */}
-                <Route path="/profile" element={<UserProfile />} />
-                <Route path="/change-password" element={<ChangePassword />} />
-                
-                {/* Add more routes here for other pages */}
-                
-                {/* Default redirect to dashboard */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                
-                {/* 404 page */}
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
+            <AppRoutes />
           </NotificationProvider>
         </ChatbotProvider>
       </AuthProvider>

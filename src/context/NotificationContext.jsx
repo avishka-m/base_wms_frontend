@@ -25,22 +25,23 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
 
   // Add a notification
-  const addNotification = useCallback((message, type = NOTIFICATION_TYPES.INFO, duration = DEFAULT_DURATION) => {
+  const addNotification = useCallback(({ type, message, description, duration = DEFAULT_DURATION }) => {
     // Create a new notification
     const id = uuidv4();
     const notification = {
       id,
-      message,
       type,
+      message,
+      description,
       duration,
-      createdAt: new Date(),
+      timestamp: new Date(),
     };
 
     // Add the notification to the state
     setNotifications((prevNotifications) => [...prevNotifications, notification]);
 
     // Set a timeout to remove the notification
-    if (duration !== Infinity) {
+    if (duration !== 0) {
       setTimeout(() => {
         removeNotification(id);
       }, duration);
@@ -55,32 +56,17 @@ export const NotificationProvider = ({ children }) => {
     setNotifications((prevNotifications) => prevNotifications.filter((notification) => notification.id !== id));
   }, []);
 
-  // Convenience methods for specific notification types
-  const success = useCallback((message, duration = DEFAULT_DURATION) => {
-    return addNotification(message, NOTIFICATION_TYPES.SUCCESS, duration);
-  }, [addNotification]);
-
-  const error = useCallback((message, duration = DEFAULT_DURATION) => {
-    return addNotification(message, NOTIFICATION_TYPES.ERROR, duration);
-  }, [addNotification]);
-
-  const warning = useCallback((message, duration = DEFAULT_DURATION) => {
-    return addNotification(message, NOTIFICATION_TYPES.WARNING, duration);
-  }, [addNotification]);
-
-  const info = useCallback((message, duration = DEFAULT_DURATION) => {
-    return addNotification(message, NOTIFICATION_TYPES.INFO, duration);
-  }, [addNotification]);
+  // Clear all notifications
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+  }, []);
 
   // Notification context value
   const value = {
     notifications,
     addNotification,
     removeNotification,
-    success,
-    error,
-    warning,
-    info,
+    clearAllNotifications,
   };
 
   return (
@@ -90,4 +76,4 @@ export const NotificationProvider = ({ children }) => {
   );
 };
 
-export default NotificationContext;
+export default NotificationProvider;
