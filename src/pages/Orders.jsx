@@ -26,10 +26,7 @@ const Orders = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const itemsPerPage = 10;
-
-  // Available order statuses
-  const orderStatuses = [
+  const [orderStatuses, setOrderStatuses] = useState([
     'Pending',
     'Processing',
     'Picking',
@@ -38,7 +35,8 @@ const Orders = () => {
     'Delivered',
     'Cancelled',
     'Returned'
-  ];
+  ]);
+  const itemsPerPage = 10;
 
   // Check if user can manage orders
   const canManageOrders = ['clerk', 'manager'].includes(currentUser?.role || '');
@@ -50,80 +48,30 @@ const Orders = () => {
         setLoading(true);
         setError(null);
 
-        // In a real app, we would use the API to fetch data with pagination
-        // const response = await orderService.getOrders({
-        //   page,
-        //   limit: itemsPerPage,
-        //   search: searchTerm,
-        //   status: statusFilter,
-        //   startDate: dateRange.start,
-        //   endDate: dateRange.end
-        // });
+        // Fetch real data from the API with pagination and filters
+        const response = await orderService.getOrders({
+          page,
+          limit: itemsPerPage,
+          search: searchTerm,
+          status: statusFilter,
+          start_date: dateRange.start,
+          end_date: dateRange.end
+        });
         
-        // For now, let's simulate an API response with mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
+        setOrders(response.items || []);
+        setTotalPages(Math.ceil(response.total / itemsPerPage) || 1);
         
-        // Generate random dates within the last month
-        const getRandomDate = () => {
-          const date = new Date();
-          date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-          return date.toISOString().split('T')[0];
-        };
-        
-        // Mock orders data
-        const mockOrders = Array.from({ length: 50 }, (_, i) => ({
-          id: i + 1,
-          order_number: `ORD-${10000 + i}`,
-          customer_name: `Customer ${i + 1}`,
-          date_placed: getRandomDate(),
-          status: orderStatuses[Math.floor(Math.random() * orderStatuses.length)],
-          items_count: Math.floor(Math.random() * 5) + 1,
-          total_amount: ((Math.random() * 500) + 20).toFixed(2),
-          shipping_address: `${Math.floor(Math.random() * 9999) + 1} Main St, City ${i % 10 + 1}`,
-          priority: Math.random() > 0.8 ? 'High' : (Math.random() > 0.5 ? 'Medium' : 'Standard')
-        }));
-        
-        // Filter based on search term and status
-        let filteredOrders = mockOrders;
-        
-        if (searchTerm) {
-          filteredOrders = filteredOrders.filter(order => 
-            order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+        // If we have orders and need to extract unique statuses
+        if (response.items && response.items.length > 0) {
+          // Extract unique statuses from the orders if not hardcoded
+          const uniqueStatuses = [...new Set(response.items.map(item => item.status))];
+          if (uniqueStatuses.length > 0) {
+            setOrderStatuses(uniqueStatuses.sort());
+          }
         }
-        
-        if (statusFilter) {
-          filteredOrders = filteredOrders.filter(order => 
-            order.status === statusFilter
-          );
-        }
-        
-        if (dateRange.start) {
-          filteredOrders = filteredOrders.filter(order =>
-            order.date_placed >= dateRange.start
-          );
-        }
-        
-        if (dateRange.end) {
-          filteredOrders = filteredOrders.filter(order =>
-            order.date_placed <= dateRange.end
-          );
-        }
-        
-        // Pagination
-        const totalItems = filteredOrders.length;
-        setTotalPages(Math.ceil(totalItems / itemsPerPage));
-        
-        const paginatedOrders = filteredOrders.slice(
-          (page - 1) * itemsPerPage,
-          page * itemsPerPage
-        );
-        
-        setOrders(paginatedOrders);
       } catch (err) {
         console.error('Error fetching orders:', err);
-        setError('Failed to load order data');
+        setError('Failed to load order data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -137,10 +85,59 @@ const Orders = () => {
     e.preventDefault();
     setPage(1); // Reset to first page when searching
   };
+  
+  // Process an order
+  const processOrder = async (orderId) => {
+    try {
+      await orderService.updateOrder(orderId, { status: 'Processing' });
+      
+      // Update the local state to show the updated status
+      setOrders(orders.map(order => 
+        order.id === orderId ? { ...order, status: 'Processing' } : order
+      ));
+      
+      alert('Order processing started successfully');
+    } catch (err) {
+      console.error('Error processing order:', err);
+      alert('Failed to process order: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  // Export orders to CSV
+  const handleExport = async () => {
+    try {
+      // Get all orders for export
+      const response = await orderService.getOrders({ limit: 1000 });
+      
+      if (!response.items || response.items.length === 0) {
+        alert('No data to export');
+        return;
+      }
+
+      // Create CSV content
+      const headers = Object.keys(response.items[0]).join(',');
+      const rows = response.items.map(item => Object.values(item).join(','));
+      const csvContent = [headers, ...rows].join('\n');
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orders-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting orders:', err);
+      alert('Failed to export orders data');
+    }
+  };
 
   // Get status badge style
   const getStatusBadge = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'pending':
         return 'badge-warning';
       case 'processing':
@@ -164,12 +161,13 @@ const Orders = () => {
 
   // Get priority badge
   const getPriorityBadge = (priority) => {
-    switch (priority.toLowerCase()) {
+    switch (priority?.toLowerCase()) {
       case 'high':
         return <span className="badge badge-danger">High</span>;
       case 'medium':
         return <span className="badge badge-warning">Medium</span>;
       case 'standard':
+      case 'normal':
         return <span className="badge badge-info">Standard</span>;
       default:
         return null;
@@ -245,9 +243,9 @@ const Orders = () => {
                 <tr key={order.id} className="table-row">
                   <td className="table-cell font-medium">{order.order_number}</td>
                   <td className="table-cell">{order.customer_name}</td>
-                  <td className="table-cell">{order.date_placed}</td>
-                  <td className="table-cell">{order.items_count}</td>
-                  <td className="table-cell">${order.total_amount}</td>
+                  <td className="table-cell">{new Date(order.date_placed).toLocaleDateString()}</td>
+                  <td className="table-cell">{order.items_count || order.items?.length || 0}</td>
+                  <td className="table-cell">${Number(order.total_amount).toFixed(2)}</td>
                   <td className="table-cell">
                     <span className={`badge ${getStatusBadge(order.status)}`}>
                       {order.status}
@@ -288,7 +286,7 @@ const Orders = () => {
                           
                           {order.status === 'Pending' && (
                             <button
-                              onClick={() => alert(`Processing order ${order.order_number}`)}
+                              onClick={() => processOrder(order.id)}
                               title="Process order"
                               className="text-green-600 hover:text-green-800"
                             >
@@ -391,7 +389,7 @@ const Orders = () => {
           )}
           <button
             className="btn btn-outline flex items-center"
-            onClick={() => {/* Export logic */}}
+            onClick={handleExport}
           >
             <ArrowDownTrayIcon className="w-5 h-5 mr-1" />
             Export
