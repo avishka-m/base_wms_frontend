@@ -23,14 +23,18 @@ export const AuthProvider = ({ children }) => {
         
         // Check if token exists
         if (authService.isAuthenticated()) {
-          // In a real app, you might want to validate the token on the server
-          // For now, we'll just set a mock user based on the token
-          // In a real implementation, you would fetch the user profile
-          setCurrentUser({
-            username: localStorage.getItem('username') || 'User',
-            role: localStorage.getItem('userRole') || 'clerk',
-            // Add other user properties as needed
-          });
+          try {
+            // Fetch real user data from the API
+            const userData = await authService.getCurrentUser();
+            setCurrentUser(userData);
+          } catch (fetchError) {
+            // Fallback to basic data if API fails
+            setCurrentUser({
+              username: localStorage.getItem('username') || 'User',
+              role: localStorage.getItem('userRole') || 'clerk',
+              // Add other user properties as needed
+            });
+          }
         }
       } catch (err) {
         console.error('Failed to load user:', err);
@@ -56,11 +60,18 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('username', username);
       localStorage.setItem('userRole', userData.role || 'clerk');
       
-      setCurrentUser({
-        username,
-        role: userData.role || 'clerk',
-        // Add other user properties from the response as needed
-      });
+      // Try to get the full user profile
+      try {
+        const fullProfile = await authService.getCurrentUser();
+        setCurrentUser(fullProfile);
+      } catch (profileError) {
+        // Fallback to basic data if API fails
+        setCurrentUser({
+          username,
+          role: userData.role || 'clerk',
+          // Add other user properties from the response as needed
+        });
+      }
       
       return userData;
     } catch (err) {
@@ -80,6 +91,22 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser(null);
   };
 
+  // Update user function
+  const updateUser = (userData) => {
+    setCurrentUser(prev => ({
+      ...prev,
+      ...userData,
+    }));
+    
+    // Update local storage if needed
+    if (userData.username) {
+      localStorage.setItem('username', userData.username);
+    }
+    if (userData.role) {
+      localStorage.setItem('userRole', userData.role);
+    }
+  };
+
   // Context value
   const value = {
     currentUser,
@@ -87,6 +114,7 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     logout,
+    updateUser,
     isAuthenticated: authService.isAuthenticated,
   };
 

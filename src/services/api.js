@@ -91,6 +91,24 @@ export const authService = {
       throw error;
     }
   },
+  
+  updateProfile: async (userData) => {
+    try {
+      const response = await api.put('/auth/profile', userData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  
+  changePassword: async (passwordData) => {
+    try {
+      const response = await api.post('/auth/change-password', passwordData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
 };
 
 // Inventory Services

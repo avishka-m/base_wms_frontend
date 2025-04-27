@@ -19,6 +19,9 @@ import EditInventoryItem from './components/inventory/EditInventoryItem';
 import OrderDetails from './components/orders/OrderDetails';
 import CreateOrder from './components/orders/CreateOrder';
 
+// Common Components
+import UserProfile from './components/common/UserProfile';
+
 function App() {
   return (
     <BrowserRouter>
@@ -41,6 +44,9 @@ function App() {
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/create" element={<CreateOrder />} />
               <Route path="/orders/:id" element={<OrderDetails />} />
+              
+              {/* User routes */}
+              <Route path="/profile" element={<UserProfile />} />
               
               {/* Add more routes here for other pages */}
               
