@@ -17,6 +17,7 @@ import EditInventoryItem from './components/inventory/EditInventoryItem';
 
 // Order Components
 import OrderDetails from './components/orders/OrderDetails';
+import CreateOrder from './components/orders/CreateOrder';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
               
               {/* Order routes */}
               <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/create" element={<CreateOrder />} />
               <Route path="/orders/:id" element={<OrderDetails />} />
               
               {/* Add more routes here for other pages */}
