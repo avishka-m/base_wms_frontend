@@ -1,20 +1,14 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/api';
+import { createContext, useState, useEffect } from 'react';
+import { authService } from '../services';
 
 // Create the auth context
 const AuthContext = createContext();
-
-// Custom hook to use the auth context
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [authenticated, setAuthenticated] = useState(false);
 
   // Attempt to load user from local storage on mount
   useEffect(() => {
@@ -24,27 +18,21 @@ export const AuthProvider = ({ children }) => {
         
         // Check if token exists
         if (authService.isAuthenticated()) {
-          setAuthenticated(true);
           try {
             // Fetch real user data from the API
             const userData = await authService.getCurrentUser();
             setCurrentUser(userData);
-          } catch (fetchError) {
+          } catch {
             // Fallback to basic data if API fails
             setCurrentUser({
               username: localStorage.getItem('username') || 'User',
               role: localStorage.getItem('userRole') || 'clerk',
-              // Add other user properties as needed
             });
           }
-        } else {
-          setAuthenticated(false);
-          setCurrentUser(null);
         }
       } catch (err) {
         console.error('Failed to load user:', err);
         setError('Failed to authenticate user. Please log in again.');
-        setAuthenticated(false);
         authService.logout();
       } finally {
         setLoading(false);
@@ -70,16 +58,14 @@ export const AuthProvider = ({ children }) => {
       try {
         const fullProfile = await authService.getCurrentUser();
         setCurrentUser(fullProfile);
-      } catch (profileError) {
+      } catch {
         // Fallback to basic data if API fails
         setCurrentUser({
           username,
           role: userData.role || 'clerk',
-          // Add other user properties from the response as needed
         });
       }
       
-      setAuthenticated(true);
       return userData;
     } catch (err) {
       console.error('Login error:', err);
@@ -96,7 +82,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('username');
     localStorage.removeItem('userRole');
     setCurrentUser(null);
-    setAuthenticated(false);
   };
 
   // Update user function
@@ -115,11 +100,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Our own isAuthenticated function that uses the authenticated state
-  const isAuthenticated = () => {
-    return authenticated && authService.isAuthenticated();
-  };
-
   // Context value
   const value = {
     currentUser,
@@ -128,7 +108,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updateUser,
-    isAuthenticated,
+    isAuthenticated: authService.isAuthenticated,
   };
 
   return (

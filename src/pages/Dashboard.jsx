@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useChatbot } from '../context/ChatbotContext';
+import { useAuth } from '../hooks/useAuth';
+import { useChatbot } from '../hooks/useChatbot';
 import {
   CubeIcon,
   ShoppingCartIcon,
@@ -10,7 +10,6 @@ import {
   ArrowTrendingUpIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
-import { inventoryService, orderService, warehouseService } from '../services/api';
 
 // Dashboard statistic card
 const StatCard = ({ title, value, icon, color, change, to }) => {
@@ -387,30 +386,46 @@ const Dashboard = () => {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <StatCard
-          title="Inventory Items"
-          value={stats.inventory.total}
-          icon={<CubeIcon className="h-6 w-6 text-primary-500" />}
-          color="primary"
-          change={stats.inventory.change}
-          to="/inventory"
-        />
-        <StatCard
-          title="Pending Orders"
-          value={stats.orders.pending}
-          icon={<ShoppingCartIcon className="h-6 w-6 text-info-500" />}
-          color="info"
-          change={stats.orders.change}
-          to="/orders"
-        />
-        <StatCard
-          title="Current Tasks"
-          value={stats.tasks.pending}
-          icon={<ClockIcon className="h-6 w-6 text-warning-500" />}
-          color="warning"
-          change={stats.tasks.change}
-          to="/tasks"
-        />
+        {loading ? (
+          <>
+            <div className="card animate-pulse bg-gray-100">
+              <div className="h-20"></div>
+            </div>
+            <div className="card animate-pulse bg-gray-100">
+              <div className="h-20"></div>
+            </div>
+            <div className="card animate-pulse bg-gray-100">
+              <div className="h-20"></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Inventory Items"
+              value={stats.inventory.total}
+              icon={<CubeIcon className="h-6 w-6 text-primary-500" />}
+              color="primary"
+              change={stats.inventory.change}
+              to="/inventory"
+            />
+            <StatCard
+              title="Pending Orders"
+              value={stats.orders.pending}
+              icon={<ShoppingCartIcon className="h-6 w-6 text-info-500" />}
+              color="info"
+              change={stats.orders.change}
+              to="/orders"
+            />
+            <StatCard
+              title="Current Tasks"
+              value={stats.tasks.pending}
+              icon={<ClockIcon className="h-6 w-6 text-warning-500" />}
+              color="warning"
+              change={stats.tasks.change}
+              to="/tasks"
+            />
+          </>
+        )}
       </div>
 
       {/* Quick actions */}

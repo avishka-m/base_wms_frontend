@@ -1,197 +1,184 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../../services/api';
-import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../context/NotificationContext';
+import { NOTIFICATION_TYPES } from '../../context/NotificationContext';
 
 const ChangePassword = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: '',
-  });
+  const { addNotification } = useNotification();
+  const { updatePassword } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  
+  const [errors, setErrors] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value,
+      [name]: value
     });
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: ''
+      });
+    }
   };
 
-  // Form validation
-  const validateForm = () => {
-    if (formData.new_password !== formData.confirm_password) {
-      setError('New password and confirm password do not match');
-      return false;
+  const validate = () => {
+    let isValid = true;
+    const newErrors = { currentPassword: '', newPassword: '', confirmPassword: '' };
+    
+    // Validate current password
+    if (!formData.currentPassword) {
+      newErrors.currentPassword = 'Current password is required';
+      isValid = false;
     }
     
-    if (formData.new_password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return false;
+    // Validate new password
+    if (!formData.newPassword) {
+      newErrors.newPassword = 'New password is required';
+      isValid = false;
+    } else if (formData.newPassword.length < 8) {
+      newErrors.newPassword = 'Password must be at least 8 characters';
+      isValid = false;
     }
     
-    return true;
+    // Validate password confirmation
+    if (formData.newPassword !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+      isValid = false;
+    }
+    
+    setErrors(newErrors);
+    return isValid;
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate form
-    if (!validateForm()) {
+    if (!validate()) {
       return;
     }
     
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      setError(null);
+      await updatePassword(formData.currentPassword, formData.newPassword);
       
-      // Send request to change password
-      await authService.changePassword({
-        current_password: formData.current_password,
-        new_password: formData.new_password,
+      addNotification({
+        type: NOTIFICATION_TYPES.SUCCESS,
+        message: 'Password updated',
+        description: 'Your password has been updated successfully.'
       });
       
-      // Show success message
-      setSuccess(true);
-      
-      // Reset form
-      setFormData({
-        current_password: '',
-        new_password: '',
-        confirm_password: '',
+      // Redirect to profile page
+      navigate('/profile');
+    } catch (error) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to change password',
+        description: error.message || 'An unexpected error occurred.'
       });
-      
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        navigate('/profile');
-      }, 2000);
-    } catch (err) {
-      console.error('Error changing password:', err);
-      setError(err.response?.data?.detail || 'Failed to change password. Please check your current password and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Change Password</h1>
-        <button
-          onClick={() => navigate('/profile')}
-          className="btn btn-outline"
-        >
-          Back to Profile
-        </button>
-      </div>
+    <div className="max-w-md mx-auto bg-white shadow-md rounded-lg p-6">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Change Password</h1>
       
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {success && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
-          <div className="flex">
-            <div className="ml-3">
-              <p className="text-sm text-green-700">Password changed successfully! Redirecting to your profile...</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-4">
+          {/* Current Password */}
           <div>
-            <label htmlFor="current_password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-gray-700 font-medium mb-2">
               Current Password
+              <input
+                type="password"
+                name="currentPassword"
+                value={formData.currentPassword}
+                onChange={handleChange}
+                className={`mt-1 block w-full px-3 py-2 border ${errors.currentPassword ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500`}
+                required
+              />
             </label>
-            <input
-              id="current_password"
-              name="current_password"
-              type="password"
-              className="form-control"
-              value={formData.current_password}
-              onChange={handleInputChange}
-              required
-              disabled={loading || success}
-            />
+            {errors.currentPassword && (
+              <p className="mt-1 text-sm text-red-600">{errors.currentPassword}</p>
+            )}
           </div>
-
+          
+          {/* New Password */}
           <div>
-            <label htmlFor="new_password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-gray-700 font-medium mb-2">
               New Password
+              <input
+                type="password"
+                name="newPassword"
+                value={formData.newPassword}
+                onChange={handleChange}
+                className={`mt-1 block w-full px-3 py-2 border ${errors.newPassword ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500`}
+                required
+                minLength={8}
+              />
             </label>
-            <input
-              id="new_password"
-              name="new_password"
-              type="password"
-              className="form-control"
-              value={formData.new_password}
-              onChange={handleInputChange}
-              required
-              minLength={8}
-              disabled={loading || success}
-            />
-            <p className="mt-1 text-xs text-gray-500">Password must be at least 8 characters long</p>
+            {errors.newPassword && (
+              <p className="mt-1 text-sm text-red-600">{errors.newPassword}</p>
+            )}
+            <p className="mt-1 text-sm text-gray-500">Password must be at least 8 characters</p>
           </div>
-
+          
+          {/* Confirm Password */}
           <div>
-            <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-gray-700 font-medium mb-2">
               Confirm New Password
+              <input
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className={`mt-1 block w-full px-3 py-2 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500`}
+                required
+              />
             </label>
-            <input
-              id="confirm_password"
-              name="confirm_password"
-              type="password"
-              className="form-control"
-              value={formData.confirm_password}
-              onChange={handleInputChange}
-              required
-              disabled={loading || success}
-            />
+            {errors.confirmPassword && (
+              <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+            )}
           </div>
-
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+          
+          {/* Form Actions */}
+          <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
-              className="btn btn-outline"
               onClick={() => navigate('/profile')}
-              disabled={loading || success}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn btn-primary"
-              disabled={loading || success}
+              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              disabled={loading}
             >
-              {loading ? (
-                <span className="flex items-center">
-                  <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                  Changing Password...
-                </span>
-              ) : (
-                'Change Password'
-              )}
+              {loading ? 'Updating...' : 'Change Password'}
             </button>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 };
