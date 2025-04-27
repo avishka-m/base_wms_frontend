@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useChatbot } from '../../context/ChatbotContext';
-import { useAuth } from '../../context/AuthContext';
+import { useChatbot } from '../../hooks/useChatbot';
+import { useAuth } from '../../hooks/useAuth';
 import {
   XMarkIcon,
   PaperAirplaneIcon,

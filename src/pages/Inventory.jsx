@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { inventoryService } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -12,6 +11,17 @@ import {
   TrashIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+
+// Available categories - in a real app, this might come from the API
+const categories = [
+  'Electronics',
+  'Clothing',
+  'Home Goods',
+  'Sporting Goods',
+  'Toys',
+  'Office Supplies',
+  'Food & Beverage'
+];
 
 const Inventory = () => {
   const { currentUser } = useAuth();
@@ -24,17 +34,6 @@ const Inventory = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const itemsPerPage = 10;
-
-  // Available categories - in a real app, this might come from the API
-  const categories = [
-    'Electronics',
-    'Clothing',
-    'Home Goods',
-    'Sporting Goods',
-    'Toys',
-    'Office Supplies',
-    'Food & Beverage'
-  ];
 
   // Check if user can edit inventory
   const canEdit = ['clerk', 'manager'].includes(currentUser?.role || '');

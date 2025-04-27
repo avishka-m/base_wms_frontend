@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useChatbot } from '../../hooks/useChatbot';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Chatbot from '../chatbot/Chatbot';
-import { useChatbot } from '../../context/ChatbotContext';
 
 const Layout = () => {
   const { isChatOpen } = useChatbot();

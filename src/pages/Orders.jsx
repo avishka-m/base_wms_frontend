@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { orderService } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -15,6 +14,18 @@ import {
   TruckIcon
 } from '@heroicons/react/24/outline';
 
+// Available order statuses - in a real app, this might come from the API
+const orderStatuses = [
+  'Pending',
+  'Processing',
+  'Picking',
+  'Packing',
+  'Shipped',
+  'Delivered',
+  'Cancelled',
+  'Returned'
+];
+
 const Orders = () => {
   const { currentUser } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -27,18 +38,6 @@ const Orders = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const itemsPerPage = 10;
-
-  // Available order statuses
-  const orderStatuses = [
-    'Pending',
-    'Processing',
-    'Picking',
-    'Packing',
-    'Shipped',
-    'Delivered',
-    'Cancelled',
-    'Returned'
-  ];
 
   // Check if user can manage orders
   const canManageOrders = ['clerk', 'manager'].includes(currentUser?.role || '');
@@ -130,7 +129,7 @@ const Orders = () => {
     };
 
     fetchOrders();
-  }, [page, searchTerm, statusFilter, dateRange.start, dateRange.end]);
+  }, [page, searchTerm, statusFilter, dateRange]);
 
   // Handle search
   const handleSearch = (e) => {

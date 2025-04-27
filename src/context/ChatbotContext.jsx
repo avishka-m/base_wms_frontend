@@ -1,14 +1,9 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { chatbotService } from '../services/api';
-import { useAuth } from './AuthContext';
+import { createContext, useState, useEffect } from 'react';
+import { chatbotService } from '../services';
+import { useAuth } from '../hooks/useAuth';
 
 // Create the chatbot context
 const ChatbotContext = createContext();
-
-// Custom hook to use the chatbot context
-export const useChatbot = () => {
-  return useContext(ChatbotContext);
-};
 
 // Chatbot provider component
 export const ChatbotProvider = ({ children }) => {
@@ -29,16 +24,11 @@ export const ChatbotProvider = ({ children }) => {
         const data = await chatbotService.getConversation(conversationId);
         
         if (data && data.messages) {
-          setMessages(data.messages.map(msg => ({
-            id: msg.timestamp,
-            role: msg.role === 'assistant' ? 'bot' : 'user',
-            content: msg.role === 'assistant' ? msg.response : msg.message,
-            timestamp: msg.timestamp
-          })));
+          setMessages(data.messages);
         }
       } catch (err) {
-        console.error('Failed to load conversation:', err);
-        setError('Failed to load chat history');
+        console.error('Error loading conversation:', err);
+        setError('Failed to load conversation history');
       } finally {
         setLoading(false);
       }
@@ -47,74 +37,30 @@ export const ChatbotProvider = ({ children }) => {
     loadConversation();
   }, [conversationId]);
 
-  // Send message to chatbot
-  const sendMessage = async (messageText) => {
-    if (!messageText.trim() || !currentUser) return;
-    
-    // Add user message to state immediately
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: messageText,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    
+  // Send message function
+  const sendMessage = async (message) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Add loading message
-      const loadingId = Date.now() + 1;
-      setMessages(prev => [...prev, {
-        id: loadingId,
-        role: 'bot',
-        content: '...',
-        isLoading: true
-      }]);
+      const response = await chatbotService.sendMessage(message, {
+        conversationId,
+        role: currentUser?.role || 'clerk'
+      });
       
-      // Send to API
-      const response = await chatbotService.sendMessage(
-        currentUser.role,
-        messageText,
-        conversationId
-      );
-      
-      // Remove loading message
-      setMessages(prev => prev.filter(msg => msg.id !== loadingId));
-      
-      // Add bot response
-      const botMessage = {
-        id: Date.now() + 2,
-        role: 'bot',
-        content: response.response,
-        timestamp: response.timestamp
-      };
-      
-      setMessages(prev => [...prev, botMessage]);
-      
-      // Save conversation ID if it's a new conversation
-      if (!conversationId && response.conversation_id) {
-        setConversationId(response.conversation_id);
+      if (response.conversationId && !conversationId) {
+        setConversationId(response.conversationId);
       }
+      
+      setMessages(prev => [...prev, 
+        { id: Date.now(), role: 'user', content: message },
+        { id: Date.now() + 1, role: 'assistant', content: response.reply }
+      ]);
       
       return response;
     } catch (err) {
-      console.error('Failed to send message:', err);
-      
-      // Remove loading message if it exists
-      setMessages(prev => prev.filter(msg => !msg.isLoading));
-      
-      // Add error message
-      setMessages(prev => [...prev, {
-        id: Date.now() + 3,
-        role: 'bot',
-        content: 'Sorry, I encountered an error. Please try again later.',
-        isError: true
-      }]);
-      
-      setError('Failed to get response from chatbot');
+      console.error('Error sending message:', err);
+      setError('Failed to send message. Please try again.');
       throw err;
     } finally {
       setLoading(false);
@@ -125,19 +71,17 @@ export const ChatbotProvider = ({ children }) => {
   const clearConversation = () => {
     setMessages([]);
     setConversationId(null);
+    setError(null);
   };
 
-  // Toggle chat visibility
-  const toggleChat = () => {
-    setIsChatOpen(prev => !prev);
-  };
+  // Toggle chat
+  const toggleChat = () => setIsChatOpen(prev => !prev);
 
   // Context value
   const value = {
     messages,
     loading,
     error,
-    conversationId,
     isChatOpen,
     sendMessage,
     clearConversation,
