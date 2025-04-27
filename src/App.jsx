@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ChatbotProvider } from './context/ChatbotContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import Notification from './components/common/Notification';
 
 // Pages
 import Login from './pages/Login';
@@ -28,37 +30,40 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ChatbotProvider>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            
-            {/* Protected routes - within layout */}
-            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
+          <NotificationProvider>
+            <Notification />
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<Login />} />
               
-              {/* Inventory routes */}
-              <Route path="/inventory" element={<Inventory />} />
-              <Route path="/inventory/add" element={<AddInventoryItem />} />
-              <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
-              
-              {/* Order routes */}
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/create" element={<CreateOrder />} />
-              <Route path="/orders/:id" element={<OrderDetails />} />
-              
-              {/* User routes */}
-              <Route path="/profile" element={<UserProfile />} />
-              <Route path="/change-password" element={<ChangePassword />} />
-              
-              {/* Add more routes here for other pages */}
-              
-              {/* Default redirect to dashboard */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              
-              {/* 404 page */}
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
+              {/* Protected routes - within layout */}
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                
+                {/* Inventory routes */}
+                <Route path="/inventory" element={<Inventory />} />
+                <Route path="/inventory/add" element={<AddInventoryItem />} />
+                <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
+                
+                {/* Order routes */}
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/create" element={<CreateOrder />} />
+                <Route path="/orders/:id" element={<OrderDetails />} />
+                
+                {/* User routes */}
+                <Route path="/profile" element={<UserProfile />} />
+                <Route path="/change-password" element={<ChangePassword />} />
+                
+                {/* Add more routes here for other pages */}
+                
+                {/* Default redirect to dashboard */}
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                
+                {/* 404 page */}
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </NotificationProvider>
         </ChatbotProvider>
       </AuthProvider>
     </BrowserRouter>
