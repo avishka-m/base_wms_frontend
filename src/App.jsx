@@ -8,11 +8,15 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
+import Orders from './pages/Orders';
 import NotFound from './pages/NotFound';
 
 // Inventory Components
 import AddInventoryItem from './components/inventory/AddInventoryItem';
 import EditInventoryItem from './components/inventory/EditInventoryItem';
+
+// Order Components
+import OrderDetails from './components/orders/OrderDetails';
 
 function App() {
   return (
@@ -31,6 +35,10 @@ function App() {
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/inventory/add" element={<AddInventoryItem />} />
               <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
+              
+              {/* Order routes */}
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/:id" element={<OrderDetails />} />
               
               {/* Add more routes here for other pages */}
               
