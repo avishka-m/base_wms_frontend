@@ -33,6 +33,7 @@ const Inventory = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState([]);
   const itemsPerPage = 10;
 
   // Check if user can edit inventory
@@ -45,57 +46,25 @@ const Inventory = () => {
         setLoading(true);
         setError(null);
 
-        // In a real app, we would use the API to fetch data with pagination
-        // const response = await inventoryService.getInventory({
-        //   page,
-        //   limit: itemsPerPage,
-        //   search: searchTerm,
-        //   category: categoryFilter
-        // });
+        // Fetch real data from the API with pagination and filters
+        const response = await inventoryService.getInventory({
+          page,
+          limit: itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+        });
         
-        // For now, let's simulate an API response with mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
+        setInventory(response.items || []);
+        setTotalPages(Math.ceil(response.total / itemsPerPage) || 1);
         
-        // Mock inventory data
-        const mockInventory = Array.from({ length: 50 }, (_, i) => ({
-          id: i + 1,
-          sku: `ITEM-${1000 + i}`,
-          name: `Item ${i + 1}`,
-          category: categories[Math.floor(Math.random() * categories.length)],
-          quantity: Math.floor(Math.random() * 100),
-          location: `${String.fromCharCode(65 + Math.floor(i / 10))}-${Math.floor(Math.random() * 20) + 1}-${Math.floor(Math.random() * 10) + 1}`,
-          unit_price: (Math.random() * 100 + 10).toFixed(2)
-        }));
-        
-        // Filter based on search term and category
-        let filteredInventory = mockInventory;
-        
-        if (searchTerm) {
-          filteredInventory = filteredInventory.filter(item => 
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+        // If categories aren't loaded yet, get unique categories from the inventory
+        if (categories.length === 0 && response.items) {
+          const uniqueCategories = [...new Set(response.items.map(item => item.category))];
+          setCategories(uniqueCategories.filter(Boolean).sort());
         }
-        
-        if (categoryFilter) {
-          filteredInventory = filteredInventory.filter(item => 
-            item.category === categoryFilter
-          );
-        }
-        
-        // Pagination
-        const totalItems = filteredInventory.length;
-        setTotalPages(Math.ceil(totalItems / itemsPerPage));
-        
-        const paginatedInventory = filteredInventory.slice(
-          (page - 1) * itemsPerPage,
-          page * itemsPerPage
-        );
-        
-        setInventory(paginatedInventory);
       } catch (err) {
         console.error('Error fetching inventory:', err);
-        setError('Failed to load inventory data');
+        setError('Failed to load inventory data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -114,14 +83,46 @@ const Inventory = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
-        // await inventoryService.deleteInventoryItem(id);
-        // Simulate deletion
+        await inventoryService.deleteInventoryItem(id);
+        // Update the local state to remove the deleted item
         setInventory(inventory.filter(item => item.id !== id));
         alert('Item deleted successfully');
       } catch (err) {
         console.error('Error deleting item:', err);
-        alert('Failed to delete item');
+        alert('Failed to delete item: ' + (err.response?.data?.detail || err.message));
       }
+    }
+  };
+
+  // Export inventory data to CSV
+  const handleExport = async () => {
+    try {
+      // Get all inventory items for export
+      const response = await inventoryService.getInventory({ limit: 1000 });
+      
+      if (!response.items || response.items.length === 0) {
+        alert('No data to export');
+        return;
+      }
+
+      // Create CSV content
+      const headers = Object.keys(response.items[0]).join(',');
+      const rows = response.items.map(item => Object.values(item).join(','));
+      const csvContent = [headers, ...rows].join('\n');
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting inventory:', err);
+      alert('Failed to export inventory data');
     }
   };
 
@@ -204,8 +205,8 @@ const Inventory = () => {
                       <span className="ml-2 badge badge-danger">Low</span>
                     )}
                   </td>
-                  <td className="table-cell">{item.location}</td>
-                  <td className="table-cell">${item.unit_price}</td>
+                  <td className="table-cell">{item.location_code || 'Unassigned'}</td>
+                  <td className="table-cell">${Number(item.unit_price).toFixed(2)}</td>
                   {canEdit && (
                     <td className="table-cell">
                       <div className="flex space-x-2">
@@ -316,7 +317,7 @@ const Inventory = () => {
           )}
           <button
             className="btn btn-outline flex items-center"
-            onClick={() => {/* Export logic */}}
+            onClick={handleExport}
           >
             <ArrowDownTrayIcon className="w-5 h-5 mr-1" />
             Export
