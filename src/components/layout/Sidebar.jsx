@@ -11,117 +11,65 @@ import {
   ChartBarIcon,
   Cog8ToothIcon,
   ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon
+  ChevronDoubleRightIcon,
+  BuildingStorefrontIcon,
+  MapPinIcon,
+  ArchiveBoxIcon,
+  ClipboardDocumentCheckIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
+
+const ROLE_NAVIGATION = {
+  Manager: [
+    { path: '../dashboard/Dashboard.jsx', name: 'Dashboard', icon: HomeIcon },
+    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
+    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon },
+    { path: '/customers', name: 'Customers', icon: BuildingStorefrontIcon },
+    { path: '/workers', name: 'Workers', icon: UsersIcon },
+    { path: '/locations', name: 'Locations', icon: MapPinIcon },
+    { path: '/receiving', name: 'Receiving', icon: ArrowsRightLeftIcon },
+    { path: '/picking', name: 'Picking', icon: ClipboardDocumentCheckIcon },
+    { path: '/packing', name: 'Packing', icon: ArchiveBoxIcon },
+    { path: '/shipping', name: 'Shipping', icon: TruckIcon },
+    { path: '/returns', name: 'Returns', icon: ArrowPathIcon },
+    { path: '/vehicles', name: 'Vehicles', icon: TruckIcon },
+    { path: '/analytics', name: 'Analytics', icon: ChartBarIcon },
+    { path: '/settings', name: 'Settings', icon: Cog8ToothIcon }
+  ],
+  ReceivingClerk: [
+    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
+    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
+    { path: '/receiving', name: 'Receiving', icon: ArrowsRightLeftIcon },
+    { path: '/locations', name: 'Locations', icon: MapPinIcon },
+    { path: '/returns', name: 'Returns', icon: ArrowPathIcon },
+    { path: '/orders', name: 'View Orders', icon: ShoppingCartIcon }
+  ],
+  Picker: [
+    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
+    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
+    { path: '/picking', name: 'Picking Tasks', icon: ClipboardDocumentCheckIcon },
+    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon },
+    { path: '/locations', name: 'Locations', icon: MapPinIcon }
+  ],
+  Packer: [
+    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
+    { path: '/packing', name: 'Packing Tasks', icon: ArchiveBoxIcon },
+    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon }
+  ],
+  Driver: [
+    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
+    { path: '/shipping', name: 'Shipping', icon: TruckIcon },
+    { path: '/vehicles', name: 'Vehicles', icon: TruckIcon }
+  ]
+};
 
 const Sidebar = () => {
   const location = useLocation();
   const { currentUser } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  // Define navigation items based on user role
-  const getNavItems = () => {
-    const items = [
-      {
-        path: '/dashboard',
-        name: 'Dashboard',
-        icon: <HomeIcon className="w-6 h-6" />,
-        roles: ['clerk', 'picker', 'packer', 'driver', 'manager']
-      },
-      {
-        path: '/inventory',
-        name: 'Inventory',
-        icon: <CubeIcon className="w-6 h-6" />,
-        roles: ['clerk', 'picker', 'manager']
-      },
-      {
-        path: '/orders',
-        name: 'Orders',
-        icon: <ShoppingCartIcon className="w-6 h-6" />,
-        roles: ['clerk', 'picker', 'packer', 'driver', 'manager']
-      }
-    ];
-
-    // Add role-specific navigation items
-    switch (currentUser?.role) {
-      case 'clerk':
-        items.push(
-          {
-            path: '/receiving',
-            name: 'Receiving',
-            icon: <ArrowsRightLeftIcon className="w-6 h-6" />,
-            roles: ['clerk']
-          },
-          {
-            path: '/returns',
-            name: 'Returns',
-            icon: <ArrowsRightLeftIcon className="w-6 h-6" />,
-            roles: ['clerk']
-          }
-        );
-        break;
-      case 'picker':
-        items.push(
-          {
-            path: '/picking',
-            name: 'Picking Tasks',
-            icon: <CubeIcon className="w-6 h-6" />,
-            roles: ['picker']
-          }
-        );
-        break;
-      case 'packer':
-        items.push(
-          {
-            path: '/packing',
-            name: 'Packing Tasks',
-            icon: <CubeIcon className="w-6 h-6" />,
-            roles: ['packer']
-          }
-        );
-        break;
-      case 'driver':
-        items.push(
-          {
-            path: '/shipping',
-            name: 'Shipping',
-            icon: <TruckIcon className="w-6 h-6" />,
-            roles: ['driver']
-          }
-        );
-        break;
-      case 'manager':
-        items.push(
-          {
-            path: '/workers',
-            name: 'Workers',
-            icon: <UsersIcon className="w-6 h-6" />,
-            roles: ['manager']
-          },
-          {
-            path: '/analytics',
-            name: 'Analytics',
-            icon: <ChartBarIcon className="w-6 h-6" />,
-            roles: ['manager']
-          },
-          {
-            path: '/settings',
-            name: 'Settings',
-            icon: <Cog8ToothIcon className="w-6 h-6" />,
-            roles: ['manager']
-          }
-        );
-        break;
-      default:
-        break;
-    }
-
-    return items.filter(item => 
-      item.roles.includes(currentUser?.role || 'clerk')
-    );
-  };
-
-  const navItems = getNavItems();
+  // Get navigation items based on user role
+  const navItems = currentUser?.role ? ROLE_NAVIGATION[currentUser.role] || [] : [];
 
   return (
     <aside className={`bg-white shadow-md h-screen transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
@@ -148,21 +96,24 @@ const Sidebar = () => {
         {/* Navigation */}
         <nav className="flex-1 py-4 overflow-y-auto">
           <ul className="px-2 space-y-1">
-            {navItems.map(item => (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  className={`flex items-center py-2 px-4 rounded-md ${
-                    location.pathname === item.path
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="mr-3">{item.icon}</span>
-                  {!collapsed && <span>{item.name}</span>}
-                </Link>
-              </li>
-            ))}
+            {navItems.map(item => {
+              const Icon = item.icon;
+              return (
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    className={`flex items-center py-2 px-4 rounded-md ${
+                      location.pathname === item.path
+                        ? 'bg-primary-50 text-primary-600'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="mr-3"><Icon className="w-6 h-6" /></span>
+                    {!collapsed && <span>{item.name}</span>}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 

@@ -6,3 +6,4 @@ export * from './workerService';
 export * from './locationService';
 export * from './warehouseService';
 export * from './chatbotService';
+export * from './dashboardService';

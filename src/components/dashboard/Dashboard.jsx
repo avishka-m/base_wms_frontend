@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { useChatbot } from '../hooks/useChatbot';
-import dashboardService from '../services/dashboardService';
+import { useAuth } from '../../../hooks/useAuth';
+import { useChatbot } from '../../../hooks/useChatbot';
 import {
   CubeIcon,
   ShoppingCartIcon,
@@ -12,146 +11,36 @@ import {
   ClockIcon,
   UserGroupIcon
 } from '@heroicons/react/24/outline';
-
-// Dashboard statistic card
-const StatCard = ({ title, value, icon, color, change, to }) => {
-  return (
-    <Link to={to} className="card hover:shadow-lg transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-gray-500 text-sm uppercase font-semibold tracking-wider">
-            {title}
-          </h3>
-          <p className="mt-1 text-2xl font-bold">{value}</p>
-          {change && (
-            <p className={`text-sm ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {change > 0 ? '+' : ''}{change}% from last week
-            </p>
-          )}
-        </div>
-        <div className={`p-3 rounded-full bg-${color}-100`}>
-          {icon}
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-// Quick action button
-const QuickAction = ({ title, icon, onClick, color }) => {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center p-4 bg-white rounded-lg shadow-sm hover:shadow transition-shadow border border-gray-100 ${
-        color ? `text-${color}-500` : 'text-gray-700'
-      }`}
-    >
-      {icon}
-      <span className="mt-2 text-sm font-medium text-center">{title}</span>
-    </button>
-  );
-};
-
-// Mock data for when API is unavailable
-const getMockDashboardStats = (role) => {
-  // Default mock data for all roles
-  const mockData = {
-    totalOrdersToday: 156,
-    warehouseEfficiency: 93,
-    workerAttendance: 98,
-    lowStockItems: 12,
-    
-    // Picker stats
-    ordersPickedToday: 42,
-    pickRate: 65,
-    accuracyRate: 99,
-    pendingOrders: 15,
-    
-    // Packer stats
-    ordersPackedToday: 38,
-    packingRate: 22,
-    qualityScore: 97,
-    packingQueue: 5,
-    
-    // Driver stats
-    deliveriesToday: 28,
-    onTimeRate: 94,
-    routeEfficiency: 88,
-    remainingStops: 7,
-    
-    // Clerk stats
-    returnsProcessed: 17,
-    inventoryUpdates: 112,
-    pendingReturns: 3
-  };
-  
-  return mockData;
-};
+import StatCard from './StatCard';
+import QuickAction from './QuickAction';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const { toggleChat } = useChatbot();
   const [stats, setStats] = useState(null);
-  const [error, setError] = useState(null);
-  const [isUsingMockData, setIsUsingMockData] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const previousRole = useRef(currentUser?.role || null);
-  const mockDataNotified = useRef(false);
+  const [error, setError] = useState(null); // Added error state
 
   useEffect(() => {
-    // Only fetch if the role has changed or is different from previous
-    if (!currentUser?.role || 
-        (previousRole.current === currentUser.role && stats !== null)) {
-      return;
-    }
-
     // Fetch role-specific statistics
     const fetchStats = async () => {
-      // Skip if already loading
-      if (isLoading) return;
-      
-      setIsLoading(true);
       try {
-        // Check if we're in development environment
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        
-        if (isDevelopment) {
-          // In development, attempt to fetch but fallback to mock data if it fails
-          try {
-            const data = await dashboardService.getDashboardStats(currentUser.role);
-            setStats(data);
-            setIsUsingMockData(false);
-            mockDataNotified.current = false; // Reset notification flag when using real data
-          } catch (err) {
-            console.error('Error fetching dashboard stats:', err);
-            // Fallback to mock data
-            if (!mockDataNotified.current) {
-              console.log("Using mock dashboard data due to API error");
-              mockDataNotified.current = true;
-            }
-            setStats(getMockDashboardStats(currentUser.role));
-            setIsUsingMockData(true);
-          }
-        } else {
-          // In production, always use the service and show error if it fails
-          const data = await dashboardService.getDashboardStats(currentUser.role);
-          setStats(data);
-          setIsUsingMockData(false);
+        const response = await fetch(`/api/dashboard/stats?role=${currentUser?.role}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard stats');
         }
+        const data = await response.json();
+        setStats(data);
+        setError(null); // Clear any previous errors
       } catch (err) {
         console.error('Error fetching dashboard stats:', err);
-        setError('Failed to load dashboard statistics. Please try again later.');
-        // Fallback to mock data in production too if the error is critical
-        setStats(getMockDashboardStats(currentUser.role));
-        setIsUsingMockData(true);
-      } finally {
-        setIsLoading(false);
-        previousRole.current = currentUser.role;
+        setError('Error loading dashboard data. Please try again later.');
       }
     };
 
-    fetchStats();
-  }, [currentUser?.role, isLoading]);
+    if (currentUser?.role) {
+      fetchStats();
+    }
+  }, [currentUser]);
 
   const getRoleSpecificStats = () => {
     switch (currentUser?.role) {
@@ -300,7 +189,7 @@ const Dashboard = () => {
           },
           {
             title: 'Manage Workers',
-            icon: <ClockIcon className="h-6 w-6" />,
+            icon: <UserGroupIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/workers',
             color: 'secondary'
           },
@@ -341,6 +230,7 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Error notification */}
       {error && (
         <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
           <div className="flex">
@@ -349,19 +239,6 @@ const Dashboard = () => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isUsingMockData && (
-        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="h-5 w-5 text-blue-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-blue-700">Using demo data. Connect to the backend server for live data.</p>
             </div>
           </div>
         </div>
@@ -398,9 +275,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Role-specific links */}
       <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+        <h2 className="text-lg font-medium text-gray-900">Common Tasks</h2>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {currentUser?.role === 'picker' && (
             <>
@@ -454,115 +331,8 @@ const Dashboard = () => {
           )}
         </div>
       </div>
-
-      {/* Recent Activities */}
-      <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900">Recent Activities</h2>
-        <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
-            {currentUser?.role === 'picker' && (
-              <>
-                <ActivityItem 
-                  title="Order #1234 picked"
-                  time="2 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Started picking order #1235"
-                  time="15 minutes ago"
-                  status="in-progress"
-                />
-              </>
-            )}
-            {currentUser?.role === 'packer' && (
-              <>
-                <ActivityItem 
-                  title="Order #1230 packed and ready"
-                  time="5 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Quality check completed for #1229"
-                  time="20 minutes ago"
-                  status="success"
-                />
-              </>
-            )}
-            {currentUser?.role === 'driver' && (
-              <>
-                <ActivityItem 
-                  title="Delivered order #1225"
-                  time="10 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Started delivery route #5"
-                  time="1 hour ago"
-                  status="in-progress"
-                />
-              </>
-            )}
-            {currentUser?.role === 'clerk' && (
-              <>
-                <ActivityItem 
-                  title="Processed return #445"
-                  time="15 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Updated inventory count for Zone A"
-                  time="45 minutes ago"
-                  status="success"
-                />
-              </>
-            )}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-              <>
-                <ActivityItem 
-                  title="Generated monthly performance report"
-                  time="30 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Updated worker schedules for next week"
-                  time="2 hours ago"
-                  status="success"
-                />
-              </>
-            )}
-          </ul>
-        </div>
-      </div>
     </div>
   );
-}
-
-// Activity Item Component
-function ActivityItem({ title, time, status }) {
-  return (
-    <li className="px-4 py-4 sm:px-6">
-      <div className="flex items-center justify-between">
-        <p className="truncate text-sm font-medium text-primary-600">{title}</p>
-        <div className="ml-2 flex flex-shrink-0">
-          <p className="inline-flex rounded-full px-2 text-xs font-semibold leading-5"
-             style={{
-               backgroundColor: status === 'success' ? '#DEF7EC' : '#FDF6B2',
-               color: status === 'success' ? '#03543F' : '#723B13'
-             }}
-          >
-            {status === 'success' ? 'Completed' : 'In Progress'}
-          </p>
-        </div>
-      </div>
-      <div className="mt-2 sm:flex sm:justify-between">
-        <div className="sm:flex">
-          <p className="flex items-center text-sm text-gray-500">
-            {time}
-          </p>
-        </div>
-      </div>
-    </li>
-  );
-}
+};
 
 export default Dashboard;
