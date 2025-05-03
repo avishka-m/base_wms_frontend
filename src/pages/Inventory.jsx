@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { inventoryService } from '../services/inventoryService';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -45,54 +46,20 @@ const Inventory = () => {
         setLoading(true);
         setError(null);
 
-        // In a real app, we would use the API to fetch data with pagination
-        // const response = await inventoryService.getInventory({
-        //   page,
-        //   limit: itemsPerPage,
-        //   search: searchTerm,
-        //   category: categoryFilter
-        // });
-        
-        // For now, let's simulate an API response with mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Mock inventory data
-        const mockInventory = Array.from({ length: 50 }, (_, i) => ({
-          id: i + 1,
-          sku: `ITEM-${1000 + i}`,
-          name: `Item ${i + 1}`,
-          category: categories[Math.floor(Math.random() * categories.length)],
-          quantity: Math.floor(Math.random() * 100),
-          location: `${String.fromCharCode(65 + Math.floor(i / 10))}-${Math.floor(Math.random() * 20) + 1}-${Math.floor(Math.random() * 10) + 1}`,
-          unit_price: (Math.random() * 100 + 10).toFixed(2)
-        }));
-        
-        // Filter based on search term and category
-        let filteredInventory = mockInventory;
-        
-        if (searchTerm) {
-          filteredInventory = filteredInventory.filter(item => 
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+        const response = await inventoryService.getInventory({
+          page,
+          limit: itemsPerPage,
+          skip: (page - 1) * itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+        });
+
+        if (Array.isArray(response)) {
+          setInventory(response);
+          setTotalPages(Math.ceil(response.length / itemsPerPage));
+        } else {
+          throw new Error('Invalid response format from server');
         }
-        
-        if (categoryFilter) {
-          filteredInventory = filteredInventory.filter(item => 
-            item.category === categoryFilter
-          );
-        }
-        
-        // Pagination
-        const totalItems = filteredInventory.length;
-        setTotalPages(Math.ceil(totalItems / itemsPerPage));
-        
-        const paginatedInventory = filteredInventory.slice(
-          (page - 1) * itemsPerPage,
-          page * itemsPerPage
-        );
-        
-        setInventory(paginatedInventory);
       } catch (err) {
         console.error('Error fetching inventory:', err);
         setError('Failed to load inventory data');
@@ -102,7 +69,7 @@ const Inventory = () => {
     };
 
     fetchInventory();
-  }, [page, searchTerm, categoryFilter]);
+  }, [page, searchTerm, categoryFilter, itemsPerPage]);
 
   // Handle search
   const handleSearch = (e) => {
@@ -114,13 +81,20 @@ const Inventory = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
-        // await inventoryService.deleteInventoryItem(id);
-        // Simulate deletion
-        setInventory(inventory.filter(item => item.id !== id));
+        await inventoryService.deleteInventoryItem(id);
+        // Fetch updated inventory after successful deletion
+        const response = await inventoryService.getInventory({
+          page,
+          limit: itemsPerPage,
+          skip: (page - 1) * itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+        });
+        setInventory(response);
         alert('Item deleted successfully');
       } catch (err) {
         console.error('Error deleting item:', err);
-        alert('Failed to delete item');
+        alert('Failed to delete item: ' + (err.response?.data?.detail || err.message));
       }
     }
   };

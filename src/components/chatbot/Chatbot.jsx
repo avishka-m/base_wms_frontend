@@ -1,148 +1,117 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useChatbot } from '../../hooks/useChatbot';
 import { useAuth } from '../../hooks/useAuth';
-import {
-  XMarkIcon,
-  PaperAirplaneIcon,
-  ChatBubbleLeftRightIcon,
-  ArrowPathIcon
-} from '@heroicons/react/24/outline';
-import ChatMessage from './ChatMessage';
 
-const Chatbot = () => {
-  const { 
-    messages, 
-    loading, 
-    sendMessage, 
-    clearConversation, 
-    isChatOpen, 
-    toggleChat 
-  } = useChatbot();
+const ChatBot = () => {
   const { currentUser } = useAuth();
-  const [inputMessage, setInputMessage] = useState('');
-  const messageContainerRef = useRef(null);
+  const { messages, loading, error, isChatOpen, sendMessage, toggleChat } = useChatbot();
+  const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Scroll to the bottom when messages change
+  // Scroll to bottom whenever messages change
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    if (messageContainerRef.current) {
-      messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
-    }
+    scrollToBottom();
   }, [messages]);
 
-  // Focus input when chat opens
-  useEffect(() => {
-    if (isChatOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isChatOpen]);
-
-  const handleSubmit = (e) => {
+  // Handle message submission
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (inputMessage.trim() && !loading) {
-      sendMessage(inputMessage);
-      setInputMessage('');
+    const message = inputRef.current.value.trim();
+    if (!message) return;
+
+    try {
+      await sendMessage(message);
+      inputRef.current.value = '';
+    } catch (err) {
+      console.error('Failed to send message:', err);
     }
   };
 
-  // If chat is not open, just show the chat button
   if (!isChatOpen) {
     return (
       <button
         onClick={toggleChat}
-        className="fixed bottom-6 right-6 z-10 p-3 bg-primary-500 text-white rounded-full shadow-lg hover:bg-primary-600 transition-all"
-        aria-label="Open chatbot"
+        className="fixed bottom-4 right-4 bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-colors"
       >
-        <ChatBubbleLeftRightIcon className="w-6 h-6" />
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-0 right-0 z-10 md:right-6 md:bottom-6 flex flex-col bg-white rounded-t-lg md:rounded-lg shadow-xl border border-gray-200 w-full md:w-96 md:h-[32rem] transition-all">
-      {/* Chat Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-primary-500 text-white rounded-t-lg">
-        <div className="flex items-center">
-          <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" />
-          <span className="font-medium">WMS Assistant</span>
-          {currentUser && (
-            <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full capitalize">
-              {currentUser.role}
-            </span>
-          )}
-        </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={clearConversation}
-            className="p-1 hover:bg-white/20 rounded"
-            aria-label="Clear conversation"
-          >
-            <ArrowPathIcon className="w-5 h-5" />
-          </button>
-          <button
-            onClick={toggleChat}
-            className="p-1 hover:bg-white/20 rounded"
-            aria-label="Close chatbot"
-          >
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="fixed bottom-4 right-4 w-96 h-[600px] bg-white rounded-lg shadow-xl flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <h3 className="text-lg font-semibold">Warehouse Assistant</h3>
+        <button onClick={toggleChat} className="text-gray-500 hover:text-gray-700">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
-      {/* Chat Messages */}
-      <div 
-        ref={messageContainerRef} 
-        className="flex-1 overflow-y-auto p-4 flex flex-col space-y-4"
-        style={{ height: 'calc(100% - 120px)' }}
-      >
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <ChatBubbleLeftRightIcon className="w-12 h-12 mx-auto text-gray-300" />
-              <p className="mt-2 text-gray-500">
-                Hi there! I'm your warehouse assistant. How can I help you today?
-              </p>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-[80%] rounded-lg p-3 ${
+                msg.role === 'user'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-900'
+              }`}
+            >
+              {msg.content}
             </div>
           </div>
-        ) : (
-          messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              role={currentUser?.role || 'clerk'}
-            />
-          ))
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 rounded-lg p-3 text-gray-900">
+              Thinking...
+            </div>
+          </div>
         )}
+        {error && (
+          <div className="flex justify-center">
+            <div className="bg-red-100 text-red-600 rounded-lg p-3">
+              {error}
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Chat Input */}
-      <div className="p-4 border-t border-gray-200">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
+      {/* Input form */}
+      <form onSubmit={handleSubmit} className="border-t p-4">
+        <div className="flex gap-2">
           <input
             ref={inputRef}
             type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:border-primary-500"
             disabled={loading}
           />
           <button
             type="submit"
-            className={`p-2 rounded-md ${
-              loading || !inputMessage.trim()
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-500 text-white hover:bg-primary-600'
-            }`}
-            disabled={loading || !inputMessage.trim()}
-            aria-label="Send message"
+            disabled={loading}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <PaperAirplaneIcon className="w-5 h-5" />
+            Send
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 };
 
-export default Chatbot;
+export default ChatBot;
