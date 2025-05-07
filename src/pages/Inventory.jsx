@@ -23,6 +23,7 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+<<<<<<< HEAD
   const [filters, setFilters] = useState({
     category: '',
     lowStock: false,
@@ -33,6 +34,10 @@ const Inventory = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [totalPages, setTotalPages] = useState(1);
+=======
+  const [categories, setCategories] = useState([]);
+  const itemsPerPage = 10;
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
 
   // Role-based permissions
   const canManageInventory = ['Manager', 'ReceivingClerk'].includes(user?.role);
@@ -56,12 +61,17 @@ const Inventory = () => {
       setTotalPages(Math.ceil(response.total / filters.limit));
       setError(null);
       } catch (err) {
+<<<<<<< HEAD
       setError('Failed to fetch inventory items');
       addNotification({
         type: NOTIFICATION_TYPES.ERROR,
         message: 'Failed to fetch inventory items',
         description: err.message
       });
+=======
+        console.error('Error fetching inventory:', err);
+        setError('Failed to load inventory data. Please try again later.');
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
       } finally {
         setLoading(false);
       }
@@ -71,9 +81,20 @@ const Inventory = () => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
         await inventoryService.deleteInventoryItem(id);
+<<<<<<< HEAD
         addNotification({
           type: NOTIFICATION_TYPES.SUCCESS,
           message: 'Item deleted successfully'
+=======
+
+        // Fetch updated inventory after successful deletion
+        const response = await inventoryService.getInventory({
+          page,
+          limit: itemsPerPage,
+          skip: (page - 1) * itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
         });
         fetchInventory();
       } catch (err) {
@@ -83,6 +104,25 @@ const Inventory = () => {
           description: err.message
         });
       }
+
+      // Create CSV content
+      const headers = Object.keys(response.items[0]).join(',');
+      const rows = response.items.map(item => Object.values(item).join(','));
+      const csvContent = [headers, ...rows].join('\n');
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting inventory:', err);
+      alert('Failed to export inventory data');
     }
   };
 
@@ -185,6 +225,7 @@ const Inventory = () => {
     }
 
     return (
+<<<<<<< HEAD
     <div className="px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="sm:flex sm:items-center">
@@ -193,6 +234,62 @@ const Inventory = () => {
           <p className="mt-2 text-sm text-gray-700">
             Manage your warehouse inventory, track stock levels, and handle transfers.
           </p>
+=======
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full table">
+            <thead className="table-header">
+              <tr>
+                <th className="table-header-cell">SKU</th>
+                <th className="table-header-cell">Name</th>
+                <th className="table-header-cell">Category</th>
+                <th className="table-header-cell">Quantity</th>
+                <th className="table-header-cell">Location</th>
+                <th className="table-header-cell">Price</th>
+                {canEdit && <th className="table-header-cell">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="table-body">
+              {inventory.map((item) => (
+                <tr key={item.id} className="table-row">
+                  <td className="table-cell font-medium">{item.sku}</td>
+                  <td className="table-cell">{item.name}</td>
+                  <td className="table-cell">{item.category}</td>
+                  <td className="table-cell">
+                    <span className={`${
+                      item.quantity < 10 ? 'text-red-600' : 'text-gray-700'
+                    }`}>
+                      {item.quantity}
+                    </span>
+                    {item.quantity < 10 && (
+                      <span className="ml-2 badge badge-danger">Low</span>
+                    )}
+                  </td>
+                  <td className="table-cell">{item.location_code || 'Unassigned'}</td>
+                  <td className="table-cell">${Number(item.unit_price).toFixed(2)}</td>
+                  {canEdit && (
+                    <td className="table-cell">
+                      <div className="flex space-x-2">
+                        <Link
+                          to={`/inventory/edit/${item.id}`}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <PencilIcon className="w-5 h-5" />
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-2">
           {canManageInventory && (
@@ -206,8 +303,13 @@ const Inventory = () => {
           )}
           {canViewAnomalies && (
           <button
+<<<<<<< HEAD
               onClick={handleCheckAnomalies}
               className="inline-flex items-center justify-center btn btn-secondary"
+=======
+            className="btn btn-outline flex items-center"
+            onClick={handleExport}
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
           >
               <ExclamationTriangleIcon className="-ml-1 mr-2 h-5 w-5" />
               Check Anomalies

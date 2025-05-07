@@ -16,12 +16,29 @@ import { useNotification } from '../context/NotificationContext';
 import { NOTIFICATION_TYPES } from '../context/NotificationContext';
 
 // Dashboard statistic card
+<<<<<<< HEAD
 const StatCard = ({ title, value, icon: Icon, color }) => (
   <div className="bg-white overflow-hidden shadow rounded-lg">
     <div className="p-5">
       <div className="flex items-center">
         <div className={`flex-shrink-0 rounded-md p-3 ${color}`}>
           <Icon className="h-6 w-6 text-white" aria-hidden="true" />
+=======
+const StatCard = ({ title, value, icon, color, change, to }) => {
+  return (
+    <Link to={to} className="card hover:shadow-lg transition-shadow">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-gray-500 text-sm uppercase font-semibold tracking-wider">
+            {title}
+          </h3>
+          <p className="mt-1 text-2xl font-bold">{value}</p>
+          {change !== null && (
+            <p className={`text-sm ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {change > 0 ? '+' : ''}{change}% from last week
+            </p>
+          )}
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
         </div>
         <div className="ml-5 w-0 flex-1">
           <dl>
@@ -115,8 +132,12 @@ const Dashboard = () => {
   const { toggleChat } = useChatbot();
   const { addNotification } = useNotification();
   const [stats, setStats] = useState(null);
+<<<<<<< HEAD
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+=======
+
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
   const [error, setError] = useState(null);
   const [isUsingMockData, setIsUsingMockData] = useState(false);
   const previousRole = useRef(user?.role || null);
@@ -128,6 +149,7 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         
+<<<<<<< HEAD
         if (!user?.role) {
           throw new Error('User role is required');
         }
@@ -143,13 +165,51 @@ const Dashboard = () => {
         console.error('Error fetching dashboard data:', error);
         setError('Failed to load dashboard data');
         addNotification('Failed to load dashboard data', NOTIFICATION_TYPES.ERROR);
+=======
+        if (isDevelopment) {
+          // In development, attempt to fetch but fallback to mock data if it fails
+          try {
+            const data = await dashboardService.getDashboardStats(currentUser.role);
+            setStats(data);
+            setIsUsingMockData(false);
+            mockDataNotified.current = false; // Reset notification flag when using real data
+          } catch (err) {
+            console.error('Error fetching dashboard stats:', err);
+            // Fallback to mock data
+            if (!mockDataNotified.current) {
+              console.log("Using mock dashboard data due to API error");
+              mockDataNotified.current = true;
+            }
+            setStats(getMockDashboardStats(currentUser.role));
+            setIsUsingMockData(true);
+          }
+        } else {
+          // In production, always use the service and show error if it fails
+          const data = await dashboardService.getDashboardStats(currentUser.role);
+          setStats(data);
+          setIsUsingMockData(false);
+
+        }
+        
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+        setError('Failed to load dashboard statistics. Please try again later.');
+        // Fallback to mock data in production too if the error is critical
+        setStats(getMockDashboardStats(currentUser.role));
+        setIsUsingMockData(true);
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
       } finally {
         setLoading(false);
       }
     };
+<<<<<<< HEAD
 
     fetchDashboardData();
   }, [user?.role, addNotification]);
+=======
+    fetchStats();
+  }, [currentUser?.role, isLoading]);
+>>>>>>> 53e43e1fa603cb086c43c3c872c65fa1c5ad67d3
 
   const getRoleSpecificStats = () => {
     switch (user?.role) {
@@ -192,6 +252,74 @@ const Dashboard = () => {
       default:
         return [];
     }
+  };
+
+  // Fallback to mock data if API fails
+  const useFallbackData = () => {
+    // Mock stats based on user role
+    switch (currentUser?.role) {
+      case 'clerk':
+        setStats({
+          inventory: { total: '2,457', low: '24', change: 3.2 },
+          orders: { pending: '32', shipping: '18', change: -2.1 },
+          tasks: { pending: '5', progress: '2', change: 0.8 }
+        });
+        break;
+      case 'picker':
+        setStats({
+          inventory: { total: '2,457', low: '24', change: 3.2 },
+          orders: { pending: '14', shipping: '8', change: 5.6 },
+          tasks: { pending: '12', progress: '3', change: 8.2 }
+        });
+        break;
+      case 'packer':
+        setStats({
+          inventory: { total: '--', low: '--', change: null },
+          orders: { pending: '8', shipping: '15', change: 10.4 },
+          tasks: { pending: '8', progress: '2', change: -4.2 }
+        });
+        break;
+      case 'driver':
+        setStats({
+          inventory: { total: '--', low: '--', change: null },
+          orders: { pending: '6', shipping: '22', change: 7.8 },
+          tasks: { pending: '6', progress: '4', change: 6.5 }
+        });
+        break;
+      case 'manager':
+      default:
+        setStats({
+          inventory: { total: '2,457', low: '24', change: 3.2 },
+          orders: { pending: '46', shipping: '32', change: 5.9 },
+          tasks: { pending: '31', progress: '17', change: 2.4 }
+        });
+        break;
+    }
+    
+    // Mock recent activities
+    setRecentActivities([
+      {
+        id: 1,
+        type: 'inventory',
+        message: 'New inventory items received',
+        details: '25 new items added to inventory',
+        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString() // 5 minutes ago
+      },
+      {
+        id: 2,
+        type: 'order',
+        message: 'Order #12345 processed',
+        details: 'Customer: John Doe',
+        timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString() // 1 hour ago
+      },
+      {
+        id: 3,
+        type: 'shipping',
+        message: 'Shipment for order #12340 dispatched',
+        details: 'Delivery expected: 2 days',
+        timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // 3 hours ago
+      }
+    ]);
   };
 
   // Role-specific quick actions
@@ -309,6 +437,41 @@ const Dashboard = () => {
             color: 'primary'
           }
         ];
+    }
+  };
+  
+  // Get the appropriate icon for an activity type
+  const getActivityIcon = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'inventory':
+        return <CubeIcon className="h-6 w-6 text-gray-400" />;
+      case 'order':
+        return <ShoppingCartIcon className="h-6 w-6 text-gray-400" />;
+      case 'shipping':
+        return <TruckIcon className="h-6 w-6 text-gray-400" />;
+      default:
+        return <ClockIcon className="h-6 w-6 text-gray-400" />;
+    }
+  };
+  
+  // Format time ago string
+  const formatTimeAgo = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+      
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+      
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    } catch (err) {
+      return 'Unknown time';
     }
   };
 
