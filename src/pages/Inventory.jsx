@@ -34,6 +34,7 @@ const Inventory = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState([]);
   const itemsPerPage = 10;
 
   // Check if user can edit inventory
@@ -62,7 +63,7 @@ const Inventory = () => {
         }
       } catch (err) {
         console.error('Error fetching inventory:', err);
-        setError('Failed to load inventory data');
+        setError('Failed to load inventory data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -82,6 +83,7 @@ const Inventory = () => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
         await inventoryService.deleteInventoryItem(id);
+
         // Fetch updated inventory after successful deletion
         const response = await inventoryService.getInventory({
           page,
@@ -96,6 +98,25 @@ const Inventory = () => {
         console.error('Error deleting item:', err);
         alert('Failed to delete item: ' + (err.response?.data?.detail || err.message));
       }
+
+      // Create CSV content
+      const headers = Object.keys(response.items[0]).join(',');
+      const rows = response.items.map(item => Object.values(item).join(','));
+      const csvContent = [headers, ...rows].join('\n');
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting inventory:', err);
+      alert('Failed to export inventory data');
     }
   };
 
@@ -178,8 +199,8 @@ const Inventory = () => {
                       <span className="ml-2 badge badge-danger">Low</span>
                     )}
                   </td>
-                  <td className="table-cell">{item.location}</td>
-                  <td className="table-cell">${item.unit_price}</td>
+                  <td className="table-cell">{item.location_code || 'Unassigned'}</td>
+                  <td className="table-cell">${Number(item.unit_price).toFixed(2)}</td>
                   {canEdit && (
                     <td className="table-cell">
                       <div className="flex space-x-2">
@@ -290,7 +311,7 @@ const Inventory = () => {
           )}
           <button
             className="btn btn-outline flex items-center"
-            onClick={() => {/* Export logic */}}
+            onClick={handleExport}
           >
             <ArrowDownTrayIcon className="w-5 h-5 mr-1" />
             Export
