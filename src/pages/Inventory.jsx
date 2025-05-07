@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { inventoryService } from '../services/inventoryService';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -46,21 +47,19 @@ const Inventory = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch real data from the API with pagination and filters
         const response = await inventoryService.getInventory({
           page,
           limit: itemsPerPage,
+          skip: (page - 1) * itemsPerPage,
           search: searchTerm,
           category: categoryFilter
         });
-        
-        setInventory(response.items || []);
-        setTotalPages(Math.ceil(response.total / itemsPerPage) || 1);
-        
-        // If categories aren't loaded yet, get unique categories from the inventory
-        if (categories.length === 0 && response.items) {
-          const uniqueCategories = [...new Set(response.items.map(item => item.category))];
-          setCategories(uniqueCategories.filter(Boolean).sort());
+
+        if (Array.isArray(response)) {
+          setInventory(response);
+          setTotalPages(Math.ceil(response.length / itemsPerPage));
+        } else {
+          throw new Error('Invalid response format from server');
         }
       } catch (err) {
         console.error('Error fetching inventory:', err);
@@ -71,7 +70,7 @@ const Inventory = () => {
     };
 
     fetchInventory();
-  }, [page, searchTerm, categoryFilter]);
+  }, [page, searchTerm, categoryFilter, itemsPerPage]);
 
   // Handle search
   const handleSearch = (e) => {
@@ -84,25 +83,20 @@ const Inventory = () => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
         await inventoryService.deleteInventoryItem(id);
-        // Update the local state to remove the deleted item
-        setInventory(inventory.filter(item => item.id !== id));
+
+        // Fetch updated inventory after successful deletion
+        const response = await inventoryService.getInventory({
+          page,
+          limit: itemsPerPage,
+          skip: (page - 1) * itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+        });
+        setInventory(response);
         alert('Item deleted successfully');
       } catch (err) {
         console.error('Error deleting item:', err);
         alert('Failed to delete item: ' + (err.response?.data?.detail || err.message));
-      }
-    }
-  };
-
-  // Export inventory data to CSV
-  const handleExport = async () => {
-    try {
-      // Get all inventory items for export
-      const response = await inventoryService.getInventory({ limit: 1000 });
-      
-      if (!response.items || response.items.length === 0) {
-        alert('No data to export');
-        return;
       }
 
       // Create CSV content

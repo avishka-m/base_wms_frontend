@@ -4,7 +4,9 @@ import { ChatbotProvider } from './context/ChatbotContext';
 import NotificationProvider from './context/NotificationContext';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import RoleBasedRoute from './components/common/RoleBasedRoute';
 import Notification from './components/common/Notification';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import Login from './pages/Login';
@@ -25,48 +27,164 @@ import CreateOrder from './components/orders/CreateOrder';
 import UserProfile from './components/common/UserProfile';
 import ChangePassword from './components/common/ChangePassword';
 
+// Import placeholder components for new routes
+// These will need to be created separately
+import Customers from './pages/Customers';
+import Workers from './pages/Workers';
+import Locations from './pages/Locations';
+import Receiving from './pages/Receiving';
+import Picking from './pages/Picking';
+import Packing from './pages/Packing';
+import Shipping from './pages/Shipping';
+import Returns from './pages/Returns';
+import Vehicles from './pages/Vehicles';
+import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
+
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ChatbotProvider>
-          <NotificationProvider>
-            <Notification />
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<Login />} />
-              
-              {/* Protected routes - within layout */}
-              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
+    <ErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthProvider>
+          <ChatbotProvider>
+            <NotificationProvider>
+              <Notification />
+              <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<Login />} />
                 
-                {/* Inventory routes */}
-                <Route path="/inventory" element={<Inventory />} />
-                <Route path="/inventory/add" element={<AddInventoryItem />} />
-                <Route path="/inventory/edit/:id" element={<EditInventoryItem />} />
-                
-                {/* Order routes */}
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/create" element={<CreateOrder />} />
-                <Route path="/orders/:id" element={<OrderDetails />} />
-                
-                {/* User routes */}
-                <Route path="/profile" element={<UserProfile />} />
-                <Route path="/change-password" element={<ChangePassword />} />
-                
-                {/* Add more routes here for other pages */}
-                
-                {/* Default redirect to dashboard */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                
-                {/* 404 page */}
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
-          </NotificationProvider>
-        </ChatbotProvider>
-      </AuthProvider>
-    </BrowserRouter>
+                {/* Protected routes - within layout */}
+                <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                  {/* Dashboard - accessible to all authenticated users */}
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  
+                  {/* Inventory routes - Manager, ReceivingClerk, Picker */}
+                  <Route path="/inventory" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk', 'Picker']}>
+                      <Inventory />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/inventory/add" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk']}>
+                      <AddInventoryItem />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/inventory/edit/:id" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk']}>
+                      <EditInventoryItem />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Order routes - Manager, ReceivingClerk, Picker, Packer */}
+                  <Route path="/orders" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk', 'Picker', 'Packer']}>
+                      <Orders />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/orders/create" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk']}>
+                      <CreateOrder />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/orders/:id" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk', 'Picker', 'Packer']}>
+                      <OrderDetails />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Customers routes - Manager only */}
+                  <Route path="/customers" element={
+                    <RoleBasedRoute allowedRoles={['Manager']}>
+                      <Customers />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Workers routes - Manager only */}
+                  <Route path="/workers" element={
+                    <RoleBasedRoute allowedRoles={['Manager']}>
+                      <Workers />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Locations routes - Manager, ReceivingClerk, Picker */}
+                  <Route path="/locations" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk', 'Picker']}>
+                      <Locations />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Receiving routes - Manager, ReceivingClerk */}
+                  <Route path="/receiving" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk']}>
+                      <Receiving />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Picking routes - Manager, Picker */}
+                  <Route path="/picking" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'Picker']}>
+                      <Picking />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Packing routes - Manager, Packer */}
+                  <Route path="/packing" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'Packer']}>
+                      <Packing />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Shipping routes - Manager, Driver */}
+                  <Route path="/shipping" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'Driver']}>
+                      <Shipping />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Returns routes - Manager, ReceivingClerk */}
+                  <Route path="/returns" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'ReceivingClerk']}>
+                      <Returns />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Vehicles routes - Manager, Driver */}
+                  <Route path="/vehicles" element={
+                    <RoleBasedRoute allowedRoles={['Manager', 'Driver']}>
+                      <Vehicles />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Analytics routes - Manager only */}
+                  <Route path="/analytics" element={
+                    <RoleBasedRoute allowedRoles={['Manager']}>
+                      <Analytics />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* Settings routes - Manager only */}
+                  <Route path="/settings" element={
+                    <RoleBasedRoute allowedRoles={['Manager']}>
+                      <Settings />
+                    </RoleBasedRoute>
+                  } />
+                  
+                  {/* User routes - accessible to all authenticated users */}
+                  <Route path="/profile" element={<UserProfile />} />
+                  <Route path="/change-password" element={<ChangePassword />} />
+                  
+                  {/* Default redirect to dashboard */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  
+                  {/* 404 page */}
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </NotificationProvider>
+          </ChatbotProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

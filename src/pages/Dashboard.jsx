@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useChatbot } from '../hooks/useChatbot';
+import dashboardService from '../services/dashboardService';
 import {
   CubeIcon,
   ShoppingCartIcon,
   TruckIcon,
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
-  ClockIcon
+  ClockIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 
 // Dashboard statistic card
@@ -50,78 +52,151 @@ const QuickAction = ({ title, icon, onClick, color }) => {
   );
 };
 
+// Mock data for when API is unavailable
+const getMockDashboardStats = (role) => {
+  // Default mock data for all roles
+  const mockData = {
+    totalOrdersToday: 156,
+    warehouseEfficiency: 93,
+    workerAttendance: 98,
+    lowStockItems: 12,
+    
+    // Picker stats
+    ordersPickedToday: 42,
+    pickRate: 65,
+    accuracyRate: 99,
+    pendingOrders: 15,
+    
+    // Packer stats
+    ordersPackedToday: 38,
+    packingRate: 22,
+    qualityScore: 97,
+    packingQueue: 5,
+    
+    // Driver stats
+    deliveriesToday: 28,
+    onTimeRate: 94,
+    routeEfficiency: 88,
+    remainingStops: 7,
+    
+    // Clerk stats
+    returnsProcessed: 17,
+    inventoryUpdates: 112,
+    pendingReturns: 3
+  };
+  
+  return mockData;
+};
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const { toggleChat } = useChatbot();
-  const [stats, setStats] = useState({
-    inventory: { total: '...', low: '...', change: null },
-    orders: { pending: '...', shipping: '...', change: null },
-    tasks: { pending: '...', progress: '...', change: null }
-  });
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+
   const [error, setError] = useState(null);
+  const [isUsingMockData, setIsUsingMockData] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const previousRole = useRef(currentUser?.role || null);
+  const mockDataNotified = useRef(false);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    // Only fetch if the role has changed or is different from previous
+    if (!currentUser?.role || 
+        (previousRole.current === currentUser.role && stats !== null)) {
+      return;
+    }
 
-        // Fetch real data from the API
-        const responses = await Promise.allSettled([
-          inventoryService.getDashboardStats(),
-          orderService.getDashboardStats(),
-          warehouseService.getActivities({ limit: 5 }),
-        ]);
+    // Fetch role-specific statistics
+    const fetchStats = async () => {
+      // Skip if already loading
+      if (isLoading) return;
+      
+      setIsLoading(true);
+      try {
+        // Check if we're in development environment
+        const isDevelopment = process.env.NODE_ENV === 'development';
         
-        // Process inventory stats
-        if (responses[0].status === 'fulfilled' && responses[0].value) {
-          setStats(prevStats => ({
-            ...prevStats,
-            inventory: {
-              total: responses[0].value.total_items?.toLocaleString() || '0',
-              low: responses[0].value.low_stock_items?.toLocaleString() || '0',
-              change: responses[0].value.inventory_change || null,
+        if (isDevelopment) {
+          // In development, attempt to fetch but fallback to mock data if it fails
+          try {
+            const data = await dashboardService.getDashboardStats(currentUser.role);
+            setStats(data);
+            setIsUsingMockData(false);
+            mockDataNotified.current = false; // Reset notification flag when using real data
+          } catch (err) {
+            console.error('Error fetching dashboard stats:', err);
+            // Fallback to mock data
+            if (!mockDataNotified.current) {
+              console.log("Using mock dashboard data due to API error");
+              mockDataNotified.current = true;
             }
-          }));
-        }
-        
-        // Process order stats
-        if (responses[1].status === 'fulfilled' && responses[1].value) {
-          setStats(prevStats => ({
-            ...prevStats,
-            orders: {
-              pending: responses[1].value.pending_orders?.toLocaleString() || '0',
-              shipping: responses[1].value.shipping_orders?.toLocaleString() || '0',
-              change: responses[1].value.orders_change || null,
-            },
-            tasks: {
-              pending: responses[1].value.pending_tasks?.toLocaleString() || '0',
-              progress: responses[1].value.in_progress_tasks?.toLocaleString() || '0',
-              change: responses[1].value.tasks_change || null,
-            }
-          }));
-        }
-        
-        // Process recent activities
-        if (responses[2].status === 'fulfilled' && responses[2].value) {
-          setRecentActivities(responses[2].value.items || []);
+            setStats(getMockDashboardStats(currentUser.role));
+            setIsUsingMockData(true);
+          }
+        } else {
+          // In production, always use the service and show error if it fails
+          const data = await dashboardService.getDashboardStats(currentUser.role);
+          setStats(data);
+          setIsUsingMockData(false);
+
         }
         
       } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError('Failed to load dashboard data. Please try again later.');
-        
-        // Fallback to role-based mock data if API fails
-        useFallbackData();
+        console.error('Error fetching dashboard stats:', err);
+        setError('Failed to load dashboard statistics. Please try again later.');
+        // Fallback to mock data in production too if the error is critical
+        setStats(getMockDashboardStats(currentUser.role));
+        setIsUsingMockData(true);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
+        previousRole.current = currentUser.role;
       }
     };
+    fetchStats();
+  }, [currentUser?.role, isLoading]);
 
-    fetchDashboardData();
-  }, [currentUser]);
+  const getRoleSpecificStats = () => {
+    switch (currentUser?.role) {
+      case 'picker':
+        return [
+          { name: 'Orders Picked Today', value: stats?.ordersPickedToday || 0 },
+          { name: 'Pick Rate', value: `${stats?.pickRate || 0} items/hour` },
+          { name: 'Accuracy Rate', value: `${stats?.accuracyRate || 0}%` },
+          { name: 'Pending Orders', value: stats?.pendingOrders || 0 }
+        ];
+      case 'packer':
+        return [
+          { name: 'Orders Packed Today', value: stats?.ordersPackedToday || 0 },
+          { name: 'Packing Rate', value: `${stats?.packingRate || 0} orders/hour` },
+          { name: 'Quality Score', value: `${stats?.qualityScore || 0}%` },
+          { name: 'In Packing Queue', value: stats?.packingQueue || 0 }
+        ];
+      case 'driver':
+        return [
+          { name: 'Deliveries Today', value: stats?.deliveriesToday || 0 },
+          { name: 'On-Time Rate', value: `${stats?.onTimeRate || 0}%` },
+          { name: 'Route Efficiency', value: `${stats?.routeEfficiency || 0}%` },
+          { name: 'Remaining Stops', value: stats?.remainingStops || 0 }
+        ];
+      case 'clerk':
+        return [
+          { name: 'Returns Processed', value: stats?.returnsProcessed || 0 },
+          { name: 'Inventory Updates', value: stats?.inventoryUpdates || 0 },
+          { name: 'Accuracy Rate', value: `${stats?.accuracyRate || 0}%` },
+          { name: 'Pending Returns', value: stats?.pendingReturns || 0 }
+        ];
+      case 'admin':
+      case 'manager':
+        return [
+          { name: 'Orders Today', value: stats?.totalOrdersToday || 0 },
+          { name: 'Warehouse Efficiency', value: `${stats?.warehouseEfficiency || 0}%` },
+          { name: 'Worker Attendance', value: `${stats?.workerAttendance || 0}%` },
+          { name: 'Critical Inventory', value: stats?.lowStockItems || 0 }
+        ];
+      default:
+        return [];
+    }
+  };
 
   // Fallback to mock data if API fails
   const useFallbackData = () => {
@@ -384,48 +459,32 @@ const Dashboard = () => {
         </div>
       )}
 
+      {isUsingMockData && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <ExclamationTriangleIcon className="h-5 w-5 text-blue-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">Using demo data. Connect to the backend server for live data.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          <>
-            <div className="card animate-pulse bg-gray-100">
-              <div className="h-20"></div>
-            </div>
-            <div className="card animate-pulse bg-gray-100">
-              <div className="h-20"></div>
-            </div>
-            <div className="card animate-pulse bg-gray-100">
-              <div className="h-20"></div>
-            </div>
-          </>
-        ) : (
-          <>
-            <StatCard
-              title="Inventory Items"
-              value={stats.inventory.total}
-              icon={<CubeIcon className="h-6 w-6 text-primary-500" />}
-              color="primary"
-              change={stats.inventory.change}
-              to="/inventory"
-            />
-            <StatCard
-              title="Pending Orders"
-              value={stats.orders.pending}
-              icon={<ShoppingCartIcon className="h-6 w-6 text-info-500" />}
-              color="info"
-              change={stats.orders.change}
-              to="/orders"
-            />
-            <StatCard
-              title="Current Tasks"
-              value={stats.tasks.pending}
-              icon={<ClockIcon className="h-6 w-6 text-warning-500" />}
-              color="warning"
-              change={stats.tasks.change}
-              to="/tasks"
-            />
-          </>
-        )}
+      <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {getRoleSpecificStats().map((stat) => (
+          <div
+            key={stat.name}
+            className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6"
+          >
+            <dt className="truncate text-sm font-medium text-gray-500">{stat.name}</dt>
+            <dd className="mt-1 text-3xl font-semibold tracking-tight text-primary-600">
+              {stat.value}
+            </dd>
+          </div>
+        ))}
       </div>
 
       {/* Quick actions */}
@@ -444,51 +503,171 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Recent activities */}
+      {/* Quick Actions */}
       <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activities</h2>
-        <div className="card overflow-hidden">
-          {loading ? (
-            <div className="flex justify-center items-center py-8">
-              <ClockIcon className="w-8 h-8 text-gray-400 animate-spin" />
-            </div>
-          ) : recentActivities.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {recentActivities.map((activity) => (
-                <li key={activity.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {activity.message}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {activity.details}
-                      </p>
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {formatTimeAgo(activity.timestamp)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No recent activities found</p>
-            </div>
+        <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {currentUser?.role === 'picker' && (
+            <>
+              <Link to="/picking/new" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Start New Pick Task
+              </Link>
+              <Link to="/inventory/scan" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Scan Inventory
+              </Link>
+            </>
           )}
-          <div className="bg-gray-50 px-4 py-3 text-center">
-            <Link to="/activities" className="text-sm font-medium text-primary-600 hover:text-primary-500">
-              View all activities
-            </Link>
-          </div>
+          {currentUser?.role === 'packer' && (
+            <>
+              <Link to="/packing/queue" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                View Packing Queue
+              </Link>
+              <Link to="/packing/materials" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Request Packing Materials
+              </Link>
+            </>
+          )}
+          {currentUser?.role === 'driver' && (
+            <>
+              <Link to="/deliveries/route" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                View Today's Route
+              </Link>
+              <Link to="/deliveries/schedule" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Check Schedule
+              </Link>
+            </>
+          )}
+          {currentUser?.role === 'clerk' && (
+            <>
+              <Link to="/inventory/count" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Start Inventory Count
+              </Link>
+              <Link to="/returns/process" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Process Returns
+              </Link>
+            </>
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+            <>
+              <Link to="/analytics" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                View Analytics
+              </Link>
+              <Link to="/workers/schedule" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Manage Schedules
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Activities */}
+      <div className="mt-8">
+        <h2 className="text-lg font-medium text-gray-900">Recent Activities</h2>
+        <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-md">
+          <ul className="divide-y divide-gray-200">
+            {currentUser?.role === 'picker' && (
+              <>
+                <ActivityItem 
+                  title="Order #1234 picked"
+                  time="2 minutes ago"
+                  status="success"
+                />
+                <ActivityItem 
+                  title="Started picking order #1235"
+                  time="15 minutes ago"
+                  status="in-progress"
+                />
+              </>
+            )}
+            {currentUser?.role === 'packer' && (
+              <>
+                <ActivityItem 
+                  title="Order #1230 packed and ready"
+                  time="5 minutes ago"
+                  status="success"
+                />
+                <ActivityItem 
+                  title="Quality check completed for #1229"
+                  time="20 minutes ago"
+                  status="success"
+                />
+              </>
+            )}
+            {currentUser?.role === 'driver' && (
+              <>
+                <ActivityItem 
+                  title="Delivered order #1225"
+                  time="10 minutes ago"
+                  status="success"
+                />
+                <ActivityItem 
+                  title="Started delivery route #5"
+                  time="1 hour ago"
+                  status="in-progress"
+                />
+              </>
+            )}
+            {currentUser?.role === 'clerk' && (
+              <>
+                <ActivityItem 
+                  title="Processed return #445"
+                  time="15 minutes ago"
+                  status="success"
+                />
+                <ActivityItem 
+                  title="Updated inventory count for Zone A"
+                  time="45 minutes ago"
+                  status="success"
+                />
+              </>
+            )}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <>
+                <ActivityItem 
+                  title="Generated monthly performance report"
+                  time="30 minutes ago"
+                  status="success"
+                />
+                <ActivityItem 
+                  title="Updated worker schedules for next week"
+                  time="2 hours ago"
+                  status="success"
+                />
+              </>
+            )}
+          </ul>
         </div>
       </div>
     </div>
   );
-};
+}
+
+// Activity Item Component
+function ActivityItem({ title, time, status }) {
+  return (
+    <li className="px-4 py-4 sm:px-6">
+      <div className="flex items-center justify-between">
+        <p className="truncate text-sm font-medium text-primary-600">{title}</p>
+        <div className="ml-2 flex flex-shrink-0">
+          <p className="inline-flex rounded-full px-2 text-xs font-semibold leading-5"
+             style={{
+               backgroundColor: status === 'success' ? '#DEF7EC' : '#FDF6B2',
+               color: status === 'success' ? '#03543F' : '#723B13'
+             }}
+          >
+            {status === 'success' ? 'Completed' : 'In Progress'}
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 sm:flex sm:justify-between">
+        <div className="sm:flex">
+          <p className="flex items-center text-sm text-gray-500">
+            {time}
+          </p>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 export default Dashboard;
