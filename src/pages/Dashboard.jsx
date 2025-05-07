@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useChatbot } from '../hooks/useChatbot';
-import dashboardService from '../services/dashboardService';
+import { dashboardService } from '../services/api';
 import {
   CubeIcon,
   ShoppingCartIcon,
@@ -12,30 +12,27 @@ import {
   ClockIcon,
   UserGroupIcon
 } from '@heroicons/react/24/outline';
+import { useNotification } from '../context/NotificationContext';
+import { NOTIFICATION_TYPES } from '../context/NotificationContext';
 
 // Dashboard statistic card
-const StatCard = ({ title, value, icon, color, change, to }) => {
-  return (
-    <Link to={to} className="card hover:shadow-lg transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-gray-500 text-sm uppercase font-semibold tracking-wider">
-            {title}
-          </h3>
-          <p className="mt-1 text-2xl font-bold">{value}</p>
-          {change && (
-            <p className={`text-sm ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {change > 0 ? '+' : ''}{change}% from last week
-            </p>
-          )}
+const StatCard = ({ title, value, icon: Icon, color }) => (
+  <div className="bg-white overflow-hidden shadow rounded-lg">
+    <div className="p-5">
+      <div className="flex items-center">
+        <div className={`flex-shrink-0 rounded-md p-3 ${color}`}>
+          <Icon className="h-6 w-6 text-white" aria-hidden="true" />
         </div>
-        <div className={`p-3 rounded-full bg-${color}-100`}>
-          {icon}
+        <div className="ml-5 w-0 flex-1">
+          <dl>
+            <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
+            <dd className="text-lg font-semibold text-gray-900">{value}</dd>
+          </dl>
         </div>
       </div>
-    </Link>
-  );
-};
+    </div>
+  </div>
+);
 
 // Quick action button
 const QuickAction = ({ title, icon, onClick, color }) => {
@@ -88,73 +85,74 @@ const getMockDashboardStats = (role) => {
   return mockData;
 };
 
+const ActivityItem = ({ activity }) => (
+  <div className="relative pb-8">
+    <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+    <div className="relative flex space-x-3">
+      <div>
+        <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${
+          activity.type === 'success' ? 'bg-green-500' :
+          activity.type === 'warning' ? 'bg-yellow-500' :
+          activity.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+        }`}>
+          <span className="text-white text-sm">{activity.icon}</span>
+        </span>
+      </div>
+      <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+        <div>
+          <p className="text-sm text-gray-500">{activity.message}</p>
+        </div>
+        <div className="text-right text-sm whitespace-nowrap text-gray-500">
+          <time dateTime={activity.timestamp}>{activity.time}</time>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 const Dashboard = () => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const { toggleChat } = useChatbot();
+  const { addNotification } = useNotification();
   const [stats, setStats] = useState(null);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingMockData, setIsUsingMockData] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const previousRole = useRef(currentUser?.role || null);
+  const previousRole = useRef(user?.role || null);
   const mockDataNotified = useRef(false);
 
   useEffect(() => {
-    // Only fetch if the role has changed or is different from previous
-    if (!currentUser?.role || 
-        (previousRole.current === currentUser.role && stats !== null)) {
-      return;
-    }
-
-    // Fetch role-specific statistics
-    const fetchStats = async () => {
-      // Skip if already loading
-      if (isLoading) return;
-      
-      setIsLoading(true);
+    const fetchDashboardData = async () => {
       try {
-        // Check if we're in development environment
-        const isDevelopment = process.env.NODE_ENV === 'development';
+        setLoading(true);
+        setError(null);
         
-        if (isDevelopment) {
-          // In development, attempt to fetch but fallback to mock data if it fails
-          try {
-            const data = await dashboardService.getDashboardStats(currentUser.role);
-            setStats(data);
-            setIsUsingMockData(false);
-            mockDataNotified.current = false; // Reset notification flag when using real data
-          } catch (err) {
-            console.error('Error fetching dashboard stats:', err);
-            // Fallback to mock data
-            if (!mockDataNotified.current) {
-              console.log("Using mock dashboard data due to API error");
-              mockDataNotified.current = true;
-            }
-            setStats(getMockDashboardStats(currentUser.role));
-            setIsUsingMockData(true);
-          }
-        } else {
-          // In production, always use the service and show error if it fails
-          const data = await dashboardService.getDashboardStats(currentUser.role);
-          setStats(data);
-          setIsUsingMockData(false);
+        if (!user?.role) {
+          throw new Error('User role is required');
         }
-      } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
-        setError('Failed to load dashboard statistics. Please try again later.');
-        // Fallback to mock data in production too if the error is critical
-        setStats(getMockDashboardStats(currentUser.role));
-        setIsUsingMockData(true);
+
+        const [statsData, activitiesData] = await Promise.all([
+          dashboardService.getStats(user.role),
+          dashboardService.getActivityFeed()
+        ]);
+        
+        setStats(statsData);
+        setActivities(Array.isArray(activitiesData) ? activitiesData : []);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        setError('Failed to load dashboard data');
+        addNotification('Failed to load dashboard data', NOTIFICATION_TYPES.ERROR);
       } finally {
-        setIsLoading(false);
-        previousRole.current = currentUser.role;
+        setLoading(false);
       }
     };
 
-    fetchStats();
-  }, [currentUser?.role, isLoading]);
+    fetchDashboardData();
+  }, [user?.role, addNotification]);
 
   const getRoleSpecificStats = () => {
-    switch (currentUser?.role) {
+    switch (user?.role) {
       case 'picker':
         return [
           { name: 'Orders Picked Today', value: stats?.ordersPickedToday || 0 },
@@ -198,7 +196,7 @@ const Dashboard = () => {
 
   // Role-specific quick actions
   const getQuickActions = () => {
-    switch (currentUser?.role) {
+    switch (user?.role) {
       case 'clerk':
         return [
           {
@@ -314,13 +312,21 @@ const Dashboard = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome, {currentUser?.username || 'User'}!
+            Welcome, {user?.username || 'User'}!
           </h1>
           <p className="text-gray-600 mt-1">
             {new Date().toLocaleDateString('en-US', {
@@ -402,7 +408,7 @@ const Dashboard = () => {
       <div className="mt-8">
         <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {currentUser?.role === 'picker' && (
+          {user?.role === 'picker' && (
             <>
               <Link to="/picking/new" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 Start New Pick Task
@@ -412,7 +418,7 @@ const Dashboard = () => {
               </Link>
             </>
           )}
-          {currentUser?.role === 'packer' && (
+          {user?.role === 'packer' && (
             <>
               <Link to="/packing/queue" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 View Packing Queue
@@ -422,7 +428,7 @@ const Dashboard = () => {
               </Link>
             </>
           )}
-          {currentUser?.role === 'driver' && (
+          {user?.role === 'driver' && (
             <>
               <Link to="/deliveries/route" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 View Today's Route
@@ -432,7 +438,7 @@ const Dashboard = () => {
               </Link>
             </>
           )}
-          {currentUser?.role === 'clerk' && (
+          {user?.role === 'clerk' && (
             <>
               <Link to="/inventory/count" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 Start Inventory Count
@@ -442,7 +448,7 @@ const Dashboard = () => {
               </Link>
             </>
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+          {(user?.role === 'admin' || user?.role === 'manager') && (
             <>
               <Link to="/analytics" className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 View Analytics
@@ -457,111 +463,22 @@ const Dashboard = () => {
 
       {/* Recent Activities */}
       <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900">Recent Activities</h2>
-        <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
-            {currentUser?.role === 'picker' && (
-              <>
-                <ActivityItem 
-                  title="Order #1234 picked"
-                  time="2 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Started picking order #1235"
-                  time="15 minutes ago"
-                  status="in-progress"
-                />
-              </>
-            )}
-            {currentUser?.role === 'packer' && (
-              <>
-                <ActivityItem 
-                  title="Order #1230 packed and ready"
-                  time="5 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Quality check completed for #1229"
-                  time="20 minutes ago"
-                  status="success"
-                />
-              </>
-            )}
-            {currentUser?.role === 'driver' && (
-              <>
-                <ActivityItem 
-                  title="Delivered order #1225"
-                  time="10 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Started delivery route #5"
-                  time="1 hour ago"
-                  status="in-progress"
-                />
-              </>
-            )}
-            {currentUser?.role === 'clerk' && (
-              <>
-                <ActivityItem 
-                  title="Processed return #445"
-                  time="15 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Updated inventory count for Zone A"
-                  time="45 minutes ago"
-                  status="success"
-                />
-              </>
-            )}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-              <>
-                <ActivityItem 
-                  title="Generated monthly performance report"
-                  time="30 minutes ago"
-                  status="success"
-                />
-                <ActivityItem 
-                  title="Updated worker schedules for next week"
-                  time="2 hours ago"
-                  status="success"
-                />
-              </>
+        <h2 className="text-lg font-medium text-gray-900">Recent Activity</h2>
+        <div className="mt-4 flow-root">
+          <ul className="-mb-8">
+            {Array.isArray(activities) && activities.length > 0 ? (
+              activities.map((activity, index) => (
+                <li key={index}>
+                  <ActivityItem activity={activity} />
+                </li>
+              ))
+            ) : (
+              <li className="text-gray-500 text-center py-4">No recent activities</li>
             )}
           </ul>
         </div>
       </div>
     </div>
-  );
-}
-
-// Activity Item Component
-function ActivityItem({ title, time, status }) {
-  return (
-    <li className="px-4 py-4 sm:px-6">
-      <div className="flex items-center justify-between">
-        <p className="truncate text-sm font-medium text-primary-600">{title}</p>
-        <div className="ml-2 flex flex-shrink-0">
-          <p className="inline-flex rounded-full px-2 text-xs font-semibold leading-5"
-             style={{
-               backgroundColor: status === 'success' ? '#DEF7EC' : '#FDF6B2',
-               color: status === 'success' ? '#03543F' : '#723B13'
-             }}
-          >
-            {status === 'success' ? 'Completed' : 'In Progress'}
-          </p>
-        </div>
-      </div>
-      <div className="mt-2 sm:flex sm:justify-between">
-        <div className="sm:flex">
-          <p className="flex items-center text-sm text-gray-500">
-            {time}
-          </p>
-        </div>
-      </div>
-    </li>
   );
 }
 

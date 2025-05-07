@@ -1,9 +1,9 @@
-import api from './apiConfig';
+import { api } from './apiConfig';
 
 /**
  * Service for fetching dashboard-related data from the backend
  */
-export const dashboardService = {
+const dashboardService = {
   /**
    * Fetch dashboard statistics based on user role
    * @param {string} role - User role (picker, packer, driver, clerk, manager, admin)
@@ -46,7 +46,36 @@ export const dashboardService = {
       console.error('Error fetching activity feed:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get dashboard statistics
+   * @param {string} role - User role
+   * @returns {Promise} Dashboard statistics
+   */
+  async getStats(role) {
+    try {
+      const response = await api.get(`/dashboard/stats?role=${role}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get activity feed
+   * @returns {Promise} Activity feed data
+   */
+  async getActivityFeed() {
+    try {
+      const response = await api.get('/dashboard/activities');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching activity feed:', error);
+      throw error;
+    }
   }
 };
 
-export default dashboardService;
+export { dashboardService };

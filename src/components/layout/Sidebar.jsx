@@ -1,142 +1,100 @@
-import { useState } from 'react';
+import { Fragment } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 import {
   HomeIcon,
   CubeIcon,
-  ShoppingCartIcon,
-  UsersIcon,
+  ClipboardDocumentListIcon,
+  UserGroupIcon,
   TruckIcon,
-  ArrowsRightLeftIcon,
   ChartBarIcon,
-  Cog8ToothIcon,
-  ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon,
-  BuildingStorefrontIcon,
-  MapPinIcon,
-  ArchiveBoxIcon,
-  ClipboardDocumentCheckIcon,
-  ArrowPathIcon
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
 
-const ROLE_NAVIGATION = {
-  Manager: [
-    { path: '../dashboard/Dashboard.jsx', name: 'Dashboard', icon: HomeIcon },
-    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
-    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon },
-    { path: '/customers', name: 'Customers', icon: BuildingStorefrontIcon },
-    { path: '/workers', name: 'Workers', icon: UsersIcon },
-    { path: '/locations', name: 'Locations', icon: MapPinIcon },
-    { path: '/receiving', name: 'Receiving', icon: ArrowsRightLeftIcon },
-    { path: '/picking', name: 'Picking', icon: ClipboardDocumentCheckIcon },
-    { path: '/packing', name: 'Packing', icon: ArchiveBoxIcon },
-    { path: '/shipping', name: 'Shipping', icon: TruckIcon },
-    { path: '/returns', name: 'Returns', icon: ArrowPathIcon },
-    { path: '/vehicles', name: 'Vehicles', icon: TruckIcon },
-    { path: '/analytics', name: 'Analytics', icon: ChartBarIcon },
-    { path: '/settings', name: 'Settings', icon: Cog8ToothIcon }
+const navigation = {
+  manager: [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Inventory', href: '/inventory', icon: CubeIcon },
+    { name: 'Orders', href: '/orders', icon: ClipboardDocumentListIcon },
+    { name: 'Workers', href: '/workers', icon: UserGroupIcon },
+    { name: 'Shipping', href: '/shipping', icon: TruckIcon },
+    { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
+    { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ],
-  ReceivingClerk: [
-    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
-    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
-    { path: '/receiving', name: 'Receiving', icon: ArrowsRightLeftIcon },
-    { path: '/locations', name: 'Locations', icon: MapPinIcon },
-    { path: '/returns', name: 'Returns', icon: ArrowPathIcon },
-    { path: '/orders', name: 'View Orders', icon: ShoppingCartIcon }
+  picker: [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Inventory', href: '/inventory', icon: CubeIcon },
+    { name: 'Picking', href: '/picking', icon: ClipboardDocumentListIcon },
   ],
-  Picker: [
-    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
-    { path: '/inventory', name: 'Inventory', icon: CubeIcon },
-    { path: '/picking', name: 'Picking Tasks', icon: ClipboardDocumentCheckIcon },
-    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon },
-    { path: '/locations', name: 'Locations', icon: MapPinIcon }
+  packer: [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Packing', href: '/packing', icon: ClipboardDocumentListIcon },
   ],
-  Packer: [
-    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
-    { path: '/packing', name: 'Packing Tasks', icon: ArchiveBoxIcon },
-    { path: '/orders', name: 'Orders', icon: ShoppingCartIcon }
+  driver: [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Deliveries', href: '/deliveries', icon: TruckIcon },
   ],
-  Driver: [
-    { path: '/dashboard', name: 'Dashboard', icon: HomeIcon },
-    { path: '/shipping', name: 'Shipping', icon: TruckIcon },
-    { path: '/vehicles', name: 'Vehicles', icon: TruckIcon }
-  ]
+  clerk: [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Inventory', href: '/inventory', icon: CubeIcon },
+    { name: 'Receiving', href: '/receiving', icon: ClipboardDocumentListIcon },
+    { name: 'Returns', href: '/returns', icon: ClipboardDocumentListIcon },
+  ],
 };
 
 const Sidebar = () => {
+  const { user, logout } = useAuth();
   const location = useLocation();
-  const { currentUser } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Get navigation items based on user role
-  const navItems = currentUser?.role ? ROLE_NAVIGATION[currentUser.role] || [] : [];
+  const role = user?.role?.toLowerCase() || 'clerk';
+  const navItems = navigation[role] || navigation.clerk;
 
   return (
-    <aside className={`bg-white shadow-md h-screen transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
-      <div className="flex flex-col h-full">
-        {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-          {!collapsed && (
-            <div className="flex items-center">
-              <span className="text-xl font-semibold text-primary-600">WMS</span>
-            </div>
-          )}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded-md text-gray-500 hover:bg-gray-100"
-          >
-            {collapsed ? (
-              <ChevronDoubleRightIcon className="w-5 h-5" />
-            ) : (
-              <ChevronDoubleLeftIcon className="w-5 h-5" />
-            )}
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 py-4 overflow-y-auto">
-          <ul className="px-2 space-y-1">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center py-2 px-4 rounded-md ${
-                      location.pathname === item.path
-                        ? 'bg-primary-50 text-primary-600'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <span className="mr-3"><Icon className="w-6 h-6" /></span>
-                    {!collapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {/* User info - only visible when not collapsed */}
-        {!collapsed && (
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center">
-              <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white font-semibold">
-                {currentUser?.username?.charAt(0).toUpperCase() || 'U'}
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700">
-                  {currentUser?.username || 'User'}
-                </p>
-                <p className="text-xs text-gray-500 capitalize">
-                  {currentUser?.role || 'User'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+    <div className="flex h-full w-64 flex-col bg-gray-800">
+      <div className="flex h-16 flex-shrink-0 items-center bg-gray-900 px-4">
+        <h1 className="text-xl font-bold text-white">WMS</h1>
       </div>
-    </aside>
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        <nav className="flex-1 space-y-1 px-2 py-4">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                  isActive
+                    ? 'bg-gray-900 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <item.icon
+                  className={`mr-3 h-6 w-6 flex-shrink-0 ${
+                    isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'
+                  }`}
+                  aria-hidden="true"
+                />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+      <div className="flex flex-shrink-0 border-t border-gray-700 p-4">
+        <div className="flex items-center">
+          <div>
+            <p className="text-sm font-medium text-white">{user?.full_name}</p>
+            <p className="text-xs font-medium text-gray-300">{user?.role}</p>
+          </div>
+        </div>
+        <button
+          onClick={logout}
+          className="ml-auto flex items-center text-gray-300 hover:text-white"
+        >
+          <ArrowRightOnRectangleIcon className="h-6 w-6" />
+        </button>
+      </div>
+    </div>
   );
 };
 

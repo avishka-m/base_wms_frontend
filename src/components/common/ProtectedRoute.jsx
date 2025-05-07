@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -15,7 +15,7 @@ const ProtectedRoute = ({ children }) => {
   }
 
   // Check if user is authenticated
-  if (!isAuthenticated()) {
+  if (!isAuthenticated) {
     // Redirect to login page, but save the location they were trying to access
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

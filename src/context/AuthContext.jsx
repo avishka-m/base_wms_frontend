@@ -1,119 +1,95 @@
-import { createContext, useState, useEffect } from 'react';
-import { authService } from '../services';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../services/authService';
+import { jwtDecode } from 'jwt-decode';
 
 // Create the auth context
-const AuthContext = createContext();
+const AuthContext = createContext(null);
+
+// Custom hook to use the auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Attempt to load user from local storage on mount
   useEffect(() => {
-    const loadUser = async () => {
+    const initializeAuth = async () => {
       try {
-        setLoading(true);
-        
-        // Check if token exists
-        if (authService.isAuthenticated()) {
-          try {
-            // Fetch real user data from the API
-            const userData = await authService.getCurrentUser();
-            setCurrentUser(userData);
-          } catch {
-            // Fallback to basic data if API fails
-            setCurrentUser({
-              username: localStorage.getItem('username') || 'User',
-              role: localStorage.getItem('userRole') || 'clerk',
-            });
+        const token = localStorage.getItem('token');
+        if (token) {
+          // Verify token is valid
+          const decoded = jwtDecode(token);
+          const currentTime = Date.now() / 1000;
+          
+          if (decoded.exp < currentTime) {
+            // Token expired
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+          } else {
+            try {
+              // Get current user data
+              const userData = await authService.getCurrentUser();
+              setUser(userData);
+            } catch (error) {
+              console.error('Error fetching user data:', error);
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              setUser(null);
+            }
           }
         }
       } catch (err) {
-        console.error('Failed to load user:', err);
-        setError('Failed to authenticate user. Please log in again.');
-        authService.logout();
+        console.error('Error initializing auth:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    loadUser();
+    initializeAuth();
   }, []);
 
-  // Login function
-  const login = async (username, password) => {
+  const login = async (credentials) => {
     try {
-      setLoading(true);
       setError(null);
-      
-      const userData = await authService.login(username, password);
-      
-      // Store user data
-      localStorage.setItem('username', username);
-      localStorage.setItem('userRole', userData.role || 'clerk');
-      
-      // Try to get the full user profile
-      try {
-        const fullProfile = await authService.getCurrentUser();
-        setCurrentUser(fullProfile);
-      } catch {
-        // Fallback to basic data if API fails
-        setCurrentUser({
-          username,
-          role: userData.role || 'clerk',
-        });
-      }
-      
+      const userData = await authService.login(credentials);
+      setUser(userData);
       return userData;
     } catch (err) {
-      console.error('Login error:', err);
-      setError(err.response?.data?.detail || 'Failed to login. Please check your credentials.');
+      setError(err.response?.data?.detail || 'Failed to login');
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  // Logout function
   const logout = () => {
     authService.logout();
-    localStorage.removeItem('username');
-    localStorage.removeItem('userRole');
-    setCurrentUser(null);
+    setUser(null);
+    setError(null);
   };
 
-  // Update user function
-  const updateUser = (userData) => {
-    setCurrentUser(prev => ({
-      ...prev,
-      ...userData,
-    }));
-    
-    // Update local storage if needed
-    if (userData.username) {
-      localStorage.setItem('username', userData.username);
-    }
-    if (userData.role) {
-      localStorage.setItem('userRole', userData.role);
-    }
-  };
-
-  // Context value
   const value = {
-    currentUser,
+    user,
     loading,
     error,
     login,
     logout,
-    updateUser,
-    isAuthenticated: authService.isAuthenticated,
+    isAuthenticated: !!user,
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

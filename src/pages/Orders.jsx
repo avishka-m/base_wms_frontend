@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
+import { NOTIFICATION_TYPES } from '../context/NotificationContext';
+import { orderService } from '../services/orderService';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -11,10 +14,14 @@ import {
   DocumentDuplicateIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  TruckIcon
+  TruckIcon,
+  TrashIcon,
+  ClipboardDocumentListIcon,
+  CubeIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 
-// Available order statuses - in a real app, this might come from the API
+// Order statuses from backend
 const orderStatuses = [
   'Pending',
   'Processing',
@@ -27,119 +34,206 @@ const orderStatuses = [
 ];
 
 const Orders = () => {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
+  const { addNotification } = useNotification();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [filters, setFilters] = useState({
+    status: '',
+    searchTerm: '',
+    dateRange: { start: '', end: '' },
+    page: 1,
+    limit: 10
+  });
   const [showFilters, setShowFilters] = useState(false);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const itemsPerPage = 10;
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showPickingListModal, setShowPickingListModal] = useState(false);
+  const [pickingList, setPickingList] = useState(null);
 
-  // Check if user can manage orders
-  const canManageOrders = ['clerk', 'manager'].includes(currentUser?.role || '');
+  // Role-based permissions
+  const canManageOrders = ['Manager', 'ReceivingClerk'].includes(currentUser?.role);
+  const canPickOrders = ['Manager', 'Picker'].includes(currentUser?.role);
+  const canPackOrders = ['Manager', 'Packer'].includes(currentUser?.role);
+  const canShipOrders = ['Manager', 'Driver'].includes(currentUser?.role);
+  const canOptimizeFulfillment = currentUser?.role === 'Manager';
 
-  // Fetch orders data
   useEffect(() => {
+    fetchOrders();
+  }, [filters]);
+
     const fetchOrders = async () => {
       try {
         setLoading(true);
+      const response = await orderService.getOrders({
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status,
+        customerId: currentUser?.role === 'Customer' ? currentUser?.customerID : undefined
+      });
+      setOrders(response);
+      setTotalPages(Math.ceil(response.length / filters.limit));
         setError(null);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to load orders');
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to load orders',
+        description: err.message
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // In a real app, we would use the API to fetch data with pagination
-        // const response = await orderService.getOrders({
-        //   page,
-        //   limit: itemsPerPage,
-        //   search: searchTerm,
-        //   status: statusFilter,
-        //   startDate: dateRange.start,
-        //   endDate: dateRange.end
-        // });
-        
-        // For now, let's simulate an API response with mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Generate random dates within the last month
-        const getRandomDate = () => {
-          const date = new Date();
-          date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-          return date.toISOString().split('T')[0];
-        };
-        
-        // Mock orders data
-        const mockOrders = Array.from({ length: 50 }, (_, i) => ({
-          id: i + 1,
-          order_number: `ORD-${10000 + i}`,
-          customer_name: `Customer ${i + 1}`,
-          date_placed: getRandomDate(),
-          status: orderStatuses[Math.floor(Math.random() * orderStatuses.length)],
-          items_count: Math.floor(Math.random() * 5) + 1,
-          total_amount: ((Math.random() * 500) + 20).toFixed(2),
-          shipping_address: `${Math.floor(Math.random() * 9999) + 1} Main St, City ${i % 10 + 1}`,
-          priority: Math.random() > 0.8 ? 'High' : (Math.random() > 0.5 ? 'Medium' : 'Standard')
-        }));
-        
-        // Filter based on search term and status
-        let filteredOrders = mockOrders;
-        
-        if (searchTerm) {
-          filteredOrders = filteredOrders.filter(order => 
-            order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        }
-        
-        if (statusFilter) {
-          filteredOrders = filteredOrders.filter(order => 
-            order.status === statusFilter
-          );
-        }
-        
-        if (dateRange.start) {
-          filteredOrders = filteredOrders.filter(order =>
-            order.date_placed >= dateRange.start
-          );
-        }
-        
-        if (dateRange.end) {
-          filteredOrders = filteredOrders.filter(order =>
-            order.date_placed <= dateRange.end
-          );
-        }
-        
-        // Pagination
-        const totalItems = filteredOrders.length;
-        setTotalPages(Math.ceil(totalItems / itemsPerPage));
-        
-        const paginatedOrders = filteredOrders.slice(
-          (page - 1) * itemsPerPage,
-          page * itemsPerPage
-        );
-        
-        setOrders(paginatedOrders);
+  const handleStatusUpdate = async (orderId, newStatus) => {
+    try {
+      setLoading(true);
+      await orderService.updateOrderStatus(orderId, newStatus, currentUser?.id);
+      addNotification({
+        type: NOTIFICATION_TYPES.SUCCESS,
+        message: 'Order status updated successfully'
+      });
+      fetchOrders();
+    } catch (err) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to update order status',
+        description: err.message
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await orderService.deleteOrder(orderId);
+      addNotification({
+        type: NOTIFICATION_TYPES.SUCCESS,
+        message: 'Order deleted successfully'
+      });
+      fetchOrders();
       } catch (err) {
-        console.error('Error fetching orders:', err);
-        setError('Failed to load order data');
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to delete order',
+        description: err.message
+      });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrders();
-  }, [page, searchTerm, statusFilter, dateRange]);
-
-  // Handle search
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1); // Reset to first page when searching
+  const handleGeneratePickingList = async (orderId) => {
+    try {
+      const list = await orderService.generatePickingList(orderId);
+      setPickingList(list);
+      setShowPickingListModal(true);
+    } catch (err) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to generate picking list',
+        description: err.message
+      });
+    }
   };
 
-  // Get status badge style
+  const handleOptimizeFulfillment = async () => {
+    try {
+      // Try with minimal parameters
+      const result = await orderService.optimizeFulfillment({
+        strategy: 'fifo'  // Only send the required strategy parameter
+      });
+      
+      const optimizedCount = result.optimizedOrders || 0;
+      addNotification({
+        type: NOTIFICATION_TYPES.SUCCESS,
+        message: 'Fulfillment optimization completed',
+        description: optimizedCount > 0
+          ? `Successfully optimized ${optimizedCount} orders. ${result.message || ''}`
+          : 'No orders required optimization at this time.'
+      });
+      
+      // Refresh the orders list to show updated status
+      fetchOrders();
+    } catch (err) {
+      console.error('Optimization error:', err);
+      
+      // Extract the most relevant error message
+      const errorMessage = err.message.startsWith('Validation error:')
+        ? err.message  // Use the full validation error message
+        : 'An error occurred during optimization. Please try again with different parameters.';
+      
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Optimization Failed',
+        description: errorMessage
+      });
+    }
+  };
+
+  const handleCheckAvailability = async (orderId) => {
+    if (!orderId) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Invalid order ID',
+        description: 'Cannot check availability for undefined order ID'
+      });
+      return;
+    }
+
+    try {
+      const result = await orderService.checkAvailability(orderId);
+      if (result.available) {
+        addNotification({
+          type: NOTIFICATION_TYPES.SUCCESS,
+          message: 'All items are available'
+        });
+      } else {
+        addNotification({
+          type: NOTIFICATION_TYPES.WARNING,
+          message: 'Some items are not available',
+          description: result.unavailableItems.join(', ')
+        });
+      }
+    } catch (err) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to check availability',
+        description: err.message
+      });
+    }
+  };
+
+  const handleAllocateInventory = async (orderId) => {
+    try {
+      await orderService.allocateInventory(orderId);
+      addNotification({
+        type: NOTIFICATION_TYPES.SUCCESS,
+        message: 'Inventory allocated successfully'
+      });
+      fetchOrders();
+    } catch (err) {
+      addNotification({
+        type: NOTIFICATION_TYPES.ERROR,
+        message: 'Failed to allocate inventory',
+        description: err.message
+      });
+    }
+  };
+
   const getStatusBadge = (status) => {
-    switch (status.toLowerCase()) {
+    if (!status) return 'badge-secondary';
+    
+    switch (status.toString().toLowerCase()) {
       case 'pending':
         return 'badge-warning';
       case 'processing':
@@ -161,21 +255,6 @@ const Orders = () => {
     }
   };
 
-  // Get priority badge
-  const getPriorityBadge = (priority) => {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return <span className="badge badge-danger">High</span>;
-      case 'medium':
-        return <span className="badge badge-warning">Medium</span>;
-      case 'standard':
-        return <span className="badge badge-info">Standard</span>;
-      default:
-        return null;
-    }
-  };
-
-  // Render orders table
   const renderOrdersTable = () => {
     if (loading) {
       return (
@@ -195,10 +274,10 @@ const Orders = () => {
             <div className="ml-3">
               <p className="text-sm text-red-700">{error}</p>
               <button
+                onClick={fetchOrders}
                 className="mt-2 text-sm font-medium text-red-700 hover:text-red-600"
-                onClick={() => window.location.reload()}
               >
-                Try again
+                Retry
               </button>
             </div>
           </div>
@@ -206,95 +285,147 @@ const Orders = () => {
       );
     }
 
-    if (orders.length === 0) {
+    if (!orders.length) {
       return (
-        <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+        <div className="text-center py-12">
           <p className="text-gray-500">No orders found</p>
-          {canManageOrders && (
-            <Link
-              to="/orders/create"
-              className="mt-4 inline-flex items-center btn btn-primary"
-            >
-              <PlusIcon className="w-5 h-5 mr-2" />
-              Create New Order
-            </Link>
-          )}
         </div>
       );
     }
 
     return (
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full table">
-            <thead className="table-header">
-              <tr>
-                <th className="table-header-cell">Order #</th>
-                <th className="table-header-cell">Customer</th>
-                <th className="table-header-cell">Date</th>
-                <th className="table-header-cell">Items</th>
-                <th className="table-header-cell">Total</th>
-                <th className="table-header-cell">Status</th>
-                <th className="table-header-cell">Priority</th>
-                <th className="table-header-cell">Actions</th>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Order Number
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Customer
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Items
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
               </tr>
             </thead>
-            <tbody className="table-body">
-              {orders.map((order) => (
-                <tr key={order.id} className="table-row">
-                  <td className="table-cell font-medium">{order.order_number}</td>
-                  <td className="table-cell">{order.customer_name}</td>
-                  <td className="table-cell">{order.date_placed}</td>
-                  <td className="table-cell">{order.items_count}</td>
-                  <td className="table-cell">${order.total_amount}</td>
-                  <td className="table-cell">
+          <tbody className="bg-white divide-y divide-gray-200">
+            {orders.map((order) => order && (
+              <tr key={order.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {order.order_number}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{order.customer_name}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    {order.date_placed ? new Date(order.date_placed).toLocaleDateString() : '-'}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`badge ${getStatusBadge(order.status)}`}>
-                      {order.status}
+                    {order.status || 'Unknown'}
                     </span>
                   </td>
-                  <td className="table-cell">
-                    {getPriorityBadge(order.priority)}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {order.items_count || 0}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  ${order.total_amount || '0.00'}
                   </td>
-                  <td className="table-cell">
-                    <div className="flex space-x-2">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <div className="flex justify-end space-x-2">
                       <Link
                         to={`/orders/${order.id}`}
-                        title="View order details"
-                        className="text-blue-600 hover:text-blue-800"
+                      className="text-primary-600 hover:text-primary-900"
+                      title="View Details"
+                    >
+                      <EyeIcon className="h-5 w-5" />
+                    </Link>
+
+                    {canPickOrders && order.status === 'Processing' && (
+                      <button
+                        onClick={() => handleGeneratePickingList(order.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Generate Picking List"
                       >
-                        <EyeIcon className="w-5 h-5" />
-                      </Link>
+                        <ClipboardDocumentListIcon className="h-5 w-5" />
+                      </button>
+                    )}
                       
                       {canManageOrders && (
                         <>
-                          <Link
-                            to={`/orders/duplicate/${order.id}`}
-                            title="Duplicate order"
-                            className="text-gray-600 hover:text-gray-800"
-                          >
-                            <DocumentDuplicateIcon className="w-5 h-5" />
-                          </Link>
-                          
-                          {['Picking', 'Packing'].includes(order.status) && (
-                            <Link
-                              to={`/orders/track/${order.id}`}
-                              title="Track order progress"
-                              className="text-purple-600 hover:text-purple-800"
-                            >
-                              <TruckIcon className="w-5 h-5" />
-                            </Link>
-                          )}
-                          
-                          {order.status === 'Pending' && (
+                        <button
+                          onClick={() => handleCheckAvailability(order.id)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Check Availability"
+                        >
+                          <CubeIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleAllocateInventory(order.id)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Allocate Inventory"
+                        >
+                          <DocumentDuplicateIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteOrder(order.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Order"
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Status update buttons based on role */}
+                    {canPickOrders && order.status === 'Processing' && (
+                      <button
+                        key={`pick-${order.id}`}
+                        onClick={() => handleStatusUpdate(order.id, 'Picking')}
+                        className="text-yellow-600 hover:text-yellow-900"
+                        title="Start Picking"
+                      >
+                        <CheckCircleIcon className="h-5 w-5" />
+                      </button>
+                    )}
+
+                    {canPackOrders && order.status === 'Picking' && (
                             <button
-                              onClick={() => alert(`Processing order ${order.order_number}`)}
-                              title="Process order"
-                              className="text-green-600 hover:text-green-800"
-                            >
-                              <CheckCircleIcon className="w-5 h-5" />
+                        key={`pack-${order.id}`}
+                        onClick={() => handleStatusUpdate(order.id, 'Packing')}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Start Packing"
+                      >
+                        <CheckCircleIcon className="h-5 w-5" />
                             </button>
                           )}
-                        </>
+
+                    {canShipOrders && order.status === 'Packing' && (
+                      <button
+                        key={`ship-${order.id}`}
+                        onClick={() => handleStatusUpdate(order.id, 'Shipped')}
+                        className="text-green-600 hover:text-green-900"
+                        title="Mark as Shipped"
+                      >
+                        <TruckIcon className="h-5 w-5" />
+                      </button>
                       )}
                     </div>
                   </td>
@@ -302,219 +433,198 @@ const Orders = () => {
               ))}
             </tbody>
           </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200">
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{(page - 1) * itemsPerPage + 1}</span> to{' '}
-                <span className="font-medium">
-                  {Math.min(page * itemsPerPage, (totalPages * itemsPerPage))}
-                </span> of{' '}
-                <span className="font-medium">{totalPages * itemsPerPage}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => setPage(page => Math.max(page - 1, 1))}
-                  disabled={page === 1}
-                  className={`relative inline-flex items-center px-2 py-2 rounded-l-md border ${
-                    page === 1 
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed' 
-                    : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="sr-only">Previous</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                
-                {/* Page numbers */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = i + 1;
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setPage(pageNum)}
-                      className={`relative inline-flex items-center px-4 py-2 border ${
-                        page === pageNum
-                        ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                <button
-                  onClick={() => setPage(page => Math.min(page + 1, totalPages))}
-                  disabled={page === totalPages}
-                  className={`relative inline-flex items-center px-2 py-2 rounded-r-md border ${
-                    page === totalPages 
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed' 
-                    : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="sr-only">Next</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </nav>
-            </div>
-          </div>
-        </div>
       </div>
     );
   };
 
   return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
     <div>
-      {/* Header with actions */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
-        <div className="mt-4 md:mt-0 flex flex-wrap gap-2">
+          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          <p className="mt-2 text-sm text-gray-700">
+            Manage orders, track status, and handle fulfillment.
+          </p>
+        </div>
+        <div className="mt-4 sm:mt-0 flex space-x-2">
           {canManageOrders && (
             <Link
-              to="/orders/create"
-              className="btn btn-primary flex items-center"
+              to="/orders/new"
+              className="btn btn-primary"
             >
-              <PlusIcon className="w-5 h-5 mr-1" />
+              <PlusIcon className="h-5 w-5 mr-2" />
               New Order
             </Link>
           )}
+          {canOptimizeFulfillment && (
           <button
-            className="btn btn-outline flex items-center"
-            onClick={() => {/* Export logic */}}
+              onClick={handleOptimizeFulfillment}
+              className="btn btn-secondary"
           >
-            <ArrowDownTrayIcon className="w-5 h-5 mr-1" />
-            Export
+              <ChartBarIcon className="h-5 w-5 mr-2" />
+              Optimize Fulfillment
           </button>
+          )}
         </div>
       </div>
 
-      {/* Search and filter */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row md:items-end gap-4">
-          <div className="flex-1">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-              Search
-            </label>
-            <div className="relative">
+      {/* Filters */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="relative rounded-md shadow-sm">
               <input
-                id="search"
                 type="text"
-                placeholder="Search by order number or customer..."
-                className="form-control pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={filters.searchTerm}
+                onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
+                className="form-input pl-10 pr-4 py-2 w-full"
+                placeholder="Search orders..."
               />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-              </div>
+              <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-3" />
             </div>
           </div>
-
-          <div>
+          <div className="mt-4 sm:mt-0 sm:ml-4 flex space-x-2">
             <button
-              type="button"
-              className="btn btn-outline flex items-center"
               onClick={() => setShowFilters(!showFilters)}
+              className="btn btn-secondary"
             >
-              <FunnelIcon className="w-5 h-5 mr-1" />
-              Filter
+              <FunnelIcon className="h-5 w-5 mr-2" />
+              Filters
+            </button>
+            <button className="btn btn-secondary">
+              <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+              Export
             </button>
           </div>
+        </div>
 
-          <div>
-            <button type="submit" className="btn btn-primary w-full md:w-auto">
-              Search
-            </button>
-          </div>
-        </form>
-
-        {/* Filters - conditionally shown */}
         {showFilters && (
-          <div className="mt-4 border-t border-gray-200 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
+              <label className="block text-sm font-medium text-gray-700">Status</label>
                 <select
-                  id="status"
-                  className="form-control"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="">All Statuses</option>
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                className="mt-1 form-select w-full"
+              >
+                <option key="all" value="">All</option>
                   {orderStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
+                  <option key={`status-${status}`} value={status}>{status}</option>
                   ))}
                 </select>
               </div>
-
               <div>
-                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Date
-                </label>
+              <label className="block text-sm font-medium text-gray-700">Start Date</label>
                 <input
-                  id="startDate"
                   type="date"
-                  className="form-control"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                value={filters.dateRange.start}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  dateRange: { ...filters.dateRange, start: e.target.value }
+                })}
+                className="mt-1 form-input w-full"
                 />
               </div>
-
               <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-                  End Date
-                </label>
+              <label className="block text-sm font-medium text-gray-700">End Date</label>
                 <input
-                  id="endDate"
                   type="date"
-                  className="form-control"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                value={filters.dateRange.end}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  dateRange: { ...filters.dateRange, end: e.target.value }
+                })}
+                className="mt-1 form-input w-full"
                 />
               </div>
-            </div>
-            
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                className="text-gray-500 hover:text-gray-700 mr-4"
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('');
-                  setDateRange({ start: '', end: '' });
-                  setPage(1);
-                }}
-              >
-                Clear Filters
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSearch}
-              >
-                Apply Filters
-              </button>
-            </div>
           </div>
         )}
       </div>
 
-      {/* Orders table */}
-      {renderOrdersTable()}
+      {/* Orders Table */}
+      <div className="bg-white shadow rounded-lg">
+        {renderOrdersTable()}
+            </div>
+            
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-6">
+          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+            <button
+              key="prev"
+              onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
+              disabled={filters.page === 1}
+              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Previous
+            </button>
+            {[...Array(totalPages)].map((_, i) => (
+              <button
+                key={`page-${i + 1}`}
+                onClick={() => setFilters({ ...filters, page: i + 1 })}
+                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                  filters.page === i + 1
+                    ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              key="next"
+              onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
+              disabled={filters.page === totalPages}
+              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Next
+            </button>
+          </nav>
+        </div>
+      )}
+
+      {/* Picking List Modal */}
+      {showPickingListModal && pickingList && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  Picking List
+                </h3>
+                <div className="mt-2">
+                  <div className="divide-y divide-gray-200">
+                    {pickingList.items.map((item) => (
+                      <div key={item.id} className="py-4">
+                        <div className="flex justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                            <p className="text-sm text-gray-500">Location: {item.location}</p>
+                          </div>
+                          <div className="text-sm text-gray-900">
+                            Quantity: {item.quantity}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-6">
+              <button
+                type="button"
+                  onClick={() => setShowPickingListModal(false)}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:text-sm"
+              >
+                  Close
+              </button>
+              </div>
+            </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

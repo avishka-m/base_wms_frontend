@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useChatbot } from '../../../hooks/useChatbot';
+import { hasPermission, ROLE_PERMISSIONS } from '../../utils/rolePermissions';
 import {
   CubeIcon,
   ShoppingCartIcon,
@@ -15,13 +16,12 @@ import StatCard from './StatCard';
 import QuickAction from './QuickAction';
 
 const Dashboard = () => {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const { toggleChat } = useChatbot();
   const [stats, setStats] = useState(null);
-  const [error, setError] = useState(null); // Added error state
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Fetch role-specific statistics
     const fetchStats = async () => {
       try {
         const response = await fetch(`/api/dashboard/stats?role=${currentUser?.role}`);
@@ -30,7 +30,7 @@ const Dashboard = () => {
         }
         const data = await response.json();
         setStats(data);
-        setError(null); // Clear any previous errors
+        setError(null);
       } catch (err) {
         console.error('Error fetching dashboard stats:', err);
         setError('Error loading dashboard data. Please try again later.');
@@ -85,121 +85,137 @@ const Dashboard = () => {
     }
   };
 
-  // Role-specific quick actions
   const getQuickActions = () => {
+    const commonActions = [];
+    
+    // Add chatbot access
+    commonActions.push({
+      title: 'Ask Assistant',
+      icon: <ClockIcon className="h-6 w-6" />,
+      onClick: toggleChat,
+      color: 'secondary',
+      disabled: !hasPermission(currentUser?.role, 'CHATBOT_ACCESS'),
+      tooltipText: !hasPermission(currentUser?.role, 'CHATBOT_ACCESS') ? 'You do not have permission to use the chatbot' : ''
+    });
+
     switch (currentUser?.role) {
       case 'clerk':
-        return [
-          {
+        if (hasPermission(currentUser?.role, 'INVENTORY_MANAGEMENT')) {
+          commonActions.unshift({
             title: 'Add Inventory',
             icon: <CubeIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/inventory/add',
             color: 'primary'
-          },
-          {
+          });
+        }
+        if (hasPermission(currentUser?.role, 'RETURNS_PROCESSING')) {
+          commonActions.unshift({
             title: 'Process Return',
             icon: <ArrowTrendingUpIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/returns/new',
             color: 'info'
-          },
-          {
-            title: 'Ask Assistant',
-            icon: <ClockIcon className="h-6 w-6" />,
-            onClick: toggleChat,
-            color: 'secondary'
-          }
-        ];
+          });
+        }
+        return commonActions;
+
       case 'picker':
-        return [
+        commonActions.unshift(
           {
             title: 'Picking Tasks',
             icon: <CubeIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/picking',
-            color: 'primary'
+            color: 'primary',
+            disabled: !hasPermission(currentUser?.role, 'PICKING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'PICKING_ACCESS') ? 'You do not have permission to access picking tasks' : ''
           },
           {
             title: 'Optimize Path',
             icon: <TruckIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/picking/path',
-            color: 'success'
-          },
-          {
-            title: 'Ask Assistant',
-            icon: <ClockIcon className="h-6 w-6" />,
-            onClick: toggleChat,
-            color: 'secondary'
+            color: 'success',
+            disabled: !hasPermission(currentUser?.role, 'PICKING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'PICKING_ACCESS') ? 'You do not have permission to optimize picking paths' : ''
           }
-        ];
+        );
+        return commonActions;
+
       case 'packer':
-        return [
+        commonActions.unshift(
           {
             title: 'Packing Tasks',
             icon: <ShoppingCartIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/packing',
-            color: 'primary'
+            color: 'primary',
+            disabled: !hasPermission(currentUser?.role, 'PACKING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'PACKING_ACCESS') ? 'You do not have permission to access packing tasks' : ''
           },
           {
             title: 'Create Sub-Order',
             icon: <CubeIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/orders/sub',
-            color: 'warning'
-          },
-          {
-            title: 'Ask Assistant',
-            icon: <ClockIcon className="h-6 w-6" />,
-            onClick: toggleChat,
-            color: 'secondary'
+            color: 'warning',
+            disabled: !hasPermission(currentUser?.role, 'PACKING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'PACKING_ACCESS') ? 'You do not have permission to create sub-orders' : ''
           }
-        ];
+        );
+        return commonActions;
+
       case 'driver':
-        return [
+        commonActions.unshift(
           {
             title: 'Shipping Tasks',
             icon: <TruckIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/shipping',
-            color: 'primary'
+            color: 'primary',
+            disabled: !hasPermission(currentUser?.role, 'SHIPPING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'SHIPPING_ACCESS') ? 'You do not have permission to access shipping tasks' : ''
           },
           {
             title: 'Optimize Route',
             icon: <ArrowTrendingUpIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/shipping/route',
-            color: 'success'
-          },
-          {
-            title: 'Ask Assistant',
-            icon: <ClockIcon className="h-6 w-6" />,
-            onClick: toggleChat,
-            color: 'secondary'
+            color: 'success',
+            disabled: !hasPermission(currentUser?.role, 'SHIPPING_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'SHIPPING_ACCESS') ? 'You do not have permission to optimize routes' : ''
           }
-        ];
+        );
+        return commonActions;
+
       case 'manager':
-      default:
-        return [
+      case 'admin':
+        const managerActions = [...commonActions];
+        
+        managerActions.unshift(
           {
             title: 'View Analytics',
             icon: <ArrowTrendingUpIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/analytics',
-            color: 'info'
+            color: 'info',
+            disabled: !hasPermission(currentUser?.role, 'ANALYTICS_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'ANALYTICS_ACCESS') ? 'You do not have permission to view analytics' : ''
           },
           {
             title: 'Check Anomalies',
             icon: <ExclamationTriangleIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/analytics/anomalies',
-            color: 'warning'
+            color: 'warning',
+            disabled: !hasPermission(currentUser?.role, 'ANOMALIES_ACCESS'),
+            tooltipText: !hasPermission(currentUser?.role, 'ANOMALIES_ACCESS') ? 'You do not have permission to check anomalies' : ''
           },
           {
             title: 'Manage Workers',
             icon: <UserGroupIcon className="h-6 w-6" />,
             onClick: () => window.location.href = '/workers',
-            color: 'secondary'
-          },
-          {
-            title: 'Ask Assistant',
-            icon: <ClockIcon className="h-6 w-6" />,
-            onClick: toggleChat,
-            color: 'primary'
+            color: 'secondary',
+            disabled: !hasPermission(currentUser?.role, 'WORKER_MANAGEMENT'),
+            tooltipText: !hasPermission(currentUser?.role, 'WORKER_MANAGEMENT') ? 'You do not have permission to manage workers' : ''
           }
-        ];
+        );
+        
+        return managerActions;
+
+      default:
+        return commonActions;
     }
   };
 
@@ -270,6 +286,8 @@ const Dashboard = () => {
               icon={action.icon}
               onClick={action.onClick}
               color={action.color}
+              disabled={action.disabled}
+              tooltipText={action.tooltipText}
             />
           ))}
         </div>

@@ -1,63 +1,39 @@
 import axios from 'axios';
 
-// API URLs from environment variables
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002/api/v1';
-const CHATBOT_API_URL = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:8001';
-
-// Create main API instance
-export const api = axios.create({
-  baseURL: API_URL,
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8002/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Create chatbot API instance
-export const chatbotApi = axios.create({
-  baseURL: CHATBOT_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add request interceptor for authentication
-const addAuthInterceptor = (axiosInstance) => {
-  axiosInstance.interceptors.request.use(
-    (config) => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  // Add response interceptor for handling errors
-  axiosInstance.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('username');
-        localStorage.removeItem('userRole');
-        window.location.href = '/login';
-      }
-      
-      // Handle chatbot-specific errors
-      if (error.response?.data?.detail) {
-        error.message = error.response.data.detail;
-      } else if (!error.response) {
-        error.message = 'Network error. Please check your connection.';
-      }
-      
-      return Promise.reject(error);
+// Add request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-  );
-};
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
-// Apply interceptors to both instances
-addAuthInterceptor(api);
-addAuthInterceptor(chatbotApi);
+// Add response interceptor to handle errors
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Clear local storage and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
-export default api;
+export { api };

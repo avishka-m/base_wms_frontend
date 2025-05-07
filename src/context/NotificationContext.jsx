@@ -2,12 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 // Create the notification context
-const NotificationContext = createContext();
-
-// Custom hook to use the notification context
-export const useNotification = () => {
-  return useContext(NotificationContext);
-};
+export const NotificationContext = createContext();
 
 // Notification types
 export const NOTIFICATION_TYPES = {
@@ -19,6 +14,15 @@ export const NOTIFICATION_TYPES = {
 
 // Default duration for notifications in milliseconds
 const DEFAULT_DURATION = 5000;
+
+// Custom hook to use the notification context
+export const useNotification = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotification must be used within a NotificationProvider');
+  }
+  return context;
+};
 
 // Notification provider component
 export const NotificationProvider = ({ children }) => {
@@ -53,7 +57,9 @@ export const NotificationProvider = ({ children }) => {
 
   // Remove a notification by ID
   const removeNotification = useCallback((id) => {
-    setNotifications((prevNotifications) => prevNotifications.filter((notification) => notification.id !== id));
+    setNotifications((prevNotifications) => 
+      prevNotifications.filter((notification) => notification.id !== id)
+    );
   }, []);
 
   // Clear all notifications
